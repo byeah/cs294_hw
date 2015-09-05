@@ -28,16 +28,15 @@ Hashtable* ht_create(int size) {
 }
 
 int ht_hash(Hashtable* hashtable, char* key) {
-	unsigned long hashval = 0;
-	size_t i = 0;
+	size_t hash, i;
+	size_t length = strlen(key);
 
-	while (hashval < ULONG_MAX && i < strlen(key)) {
-		hashval = hashval << 8;
-		hashval += key[i];
-		++i;
+	for (hash = i = 0; i < length; ++i) {
+		hash += key[i], hash += (hash << 10), hash ^= (hash >> 6);
 	}
+	hash += (hash << 3), hash ^= (hash >> 11), hash += (hash << 15);
 
-	return hashval % hashtable->size;
+	return hash % hashtable->size;
 }
 
 entry_t* ht_newpair(char *key, void *value) {
@@ -53,60 +52,103 @@ entry_t* ht_newpair(char *key, void *value) {
 	return newpair;
 }
 
-void ht_set(Hashtable* hashtable, char* key, void* value) {
+void ht_put(Hashtable* hashtable, char* key, void* value) {
 	entry_t* newpair = NULL;
-	entry_t* next = NULL;
-	entry_t* last = NULL;
+	entry_t* current = NULL;
+	entry_t* prev = NULL;
 
 	int bin = ht_hash(hashtable, key);
-	next = hashtable->table[bin];
-	while (next != NULL && next->key != NULL && strcmp(key, next->key) > 0) {
-		last = next;
-		next = next->next;
+	current = hashtable->table[bin];
+
+	while (current != NULL && strcmp(key, current->key) != 0) {
+		prev = current;
+		current = current->next;
 	}
+
 	/* There's already a pair.  Let's replace that string. */
-	if (next != NULL && next->key != NULL && strcmp(key, next->key) == 0) {
+	if (current != NULL) {
 		//free(next->value);
-		next->value = value;
+		current->value = value;
 	}
 	/* Nope, could't find it.  Time to grow a pair. */
 	else {
 		newpair = ht_newpair(key, value);
 
 		/* We're at the start of the linked list in this bin. */
-		if (next == hashtable->table[bin]) {
-			newpair->next = next;
+		if (prev == NULL) {
 			hashtable->table[bin] = newpair;
 		}
 		/* We're at the end of the linked list in this bin. */
-		else if (next == NULL) {
-			last->next = newpair;
-		}
-		/* We're in the middle of the list. */
 		else {
-			newpair->next = next;
-			last->next = newpair;
+			prev->next = newpair;
 		}
 	}
 }
 
 void* ht_get(Hashtable *hashtable, char *key) {
 	int bin = 0;
-	entry_t* pair;
+	entry_t* current = NULL;
+	entry_t* prev = NULL;
 
 	bin = ht_hash(hashtable, key);
 
 	/* Step through the bin, looking for our value. */
-	pair = hashtable->table[bin];
-	while (pair != NULL && pair->key != NULL && strcmp(key, pair->key) > 0) {
-		pair = pair->next;
+	current = hashtable->table[bin];
+	while (current != NULL && strcmp(key, current->key) != 0) {
+		prev = current;
+		current = current->next;
 	}
 
 	/* Did we actually find anything? */
-	if (pair == NULL || pair->key == NULL || strcmp(key, pair->key) != 0) {
+	if (current == NULL) {
 		return NULL;
 	}
 	else {
-		return pair->value;
+		return current->value;
+	}
+}
+
+void ht_remove(Hashtable *hashtable, char *key) {
+	int bin = 0;
+	entry_t* current = NULL;
+	entry_t* prev = NULL;
+
+	bin = ht_hash(hashtable, key);
+
+	/* Step through the bin, looking for our value. */
+	current = hashtable->table[bin];
+	while (current != NULL && strcmp(key, current->key) != 0) {
+		prev = current;
+		current = current->next;
+	}
+
+	/* Did we actually find anything? */
+	if (current == NULL) {
+		return;
+	}
+	else {
+		/* We're at the start of the linked list in this bin. */
+		if (prev == NULL) {
+			hashtable->table[bin] = current->next;
+		}
+		/* Otherwise */
+		else {
+			prev->next = current->next;
+		}
+		free(current->key);
+		free(current);
+	}
+}
+
+void ht_clear(Hashtable *hashtable) {
+	for (int i = 0; i < hashtable->size; ++i) {
+		entry_t* current = hashtable->table[i];
+		while (current != NULL) {
+			entry_t* temp = current->next;
+			free(current->key);
+			free(current);
+			current = temp;
+		}
+		hashtable->table[i] = NULL;
 	}
 }

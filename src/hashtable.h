@@ -1,6 +1,8 @@
 #ifndef HASHTABLE_H
 #define HASHTABLE_H
 
+#include <stdbool.h>
+
 struct entry_s {
 	char* key;
 	void* value;
@@ -16,7 +18,9 @@ typedef struct {
 
 Hashtable* ht_create(int size);
 
-void ht_set(Hashtable* hashtable, char* key, void* value);
+void ht_put(Hashtable* hashtable, char* key, void* value);
 void* ht_get(Hashtable *hashtable, char *key);
+void ht_remove(Hashtable *hashtable, char *key);
+void ht_clear(Hashtable *hashtable);
 
 #endif
