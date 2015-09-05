@@ -5,19 +5,19 @@
 #include "ast.h"
 #include "interpreter.h"
 
-int main (int argc, char** argvs) {
-  //Check number of arguments
-  if(argc != 2){
-    printf("Expected 1 argument to commandline.\n");
-    exit(-1);
-  }
+int main(int argc, char** argvs) {
+	//Check number of arguments
+	if (argc != 2) {
+		printf("Expected 1 argument to commandline.\n");
+		exit(-1);
+	}
 
-  //Read in AST
-  char* filename = argvs[1];
-  ScopeStmt* stmt = read_ast(filename);
+	//Read in AST
+	char* filename = argvs[1];
+	ScopeStmt* stmt = read_ast(filename);
 
-  //Interpret
-  interpret(stmt);
+	//Interpret
+	interpret(stmt);
 }
 
 
