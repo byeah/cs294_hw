@@ -156,7 +156,7 @@ void ht_clear(Hashtable *hashtable) {
 Hashtable* ht_copy(Hashtable *hashtable) {
 	Hashtable* copy = NULL;
 
-	if ((copy = ht_create(hashtable->size) == NULL)) {
+	if ((copy = ht_create(hashtable->size)) == NULL) {
 		return NULL;
 	}
 
