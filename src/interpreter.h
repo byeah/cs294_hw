@@ -6,7 +6,8 @@
 typedef enum {
     Int,
     Array,
-    Null
+    Null,
+    Env
 } ObjType;
 
 typedef struct {
@@ -40,7 +41,7 @@ typedef struct {
 	ObjType type;
 } NullObj;
 
-NullObj* make_mull_obj();
+NullObj* make_null_obj();
 
 // Array Objects
 
@@ -73,18 +74,28 @@ typedef struct {
 
 typedef struct {
 	EntryType type;
-	ScopeStmt* stmt;
-	int numOfParas;
-	char** paraNames;
+	ScopeStmt* body;
+	int nargs;
+	char** args;
 } FuncEntry;
 
 typedef struct {
+	ObjType type;
 	Hashtable* table;
 } EnvObj;
 
 EnvObj* make_env_obj(Obj* parent);
 void add_entry(EnvObj* env, char* name, Entry* entry);
 Entry* get_entry(EnvObj* env, char* name);
+
+Entry* make_var_entry(Obj* obj);
+Entry* make_func_entry(ScopeStmt*, int,char**);
+
+
+void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s);
+Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s);
+
+Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* exp);
 
 void interpret (ScopeStmt* stmt);
 
