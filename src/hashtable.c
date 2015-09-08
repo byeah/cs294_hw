@@ -89,8 +89,7 @@ void* ht_get(Hashtable *hashtable, char *key) {
 	int bin = 0;
 	entry_t* current = NULL;
 	entry_t* prev = NULL;
-
-	bin = ht_hash(hashtable, key);
+    bin = ht_hash(hashtable, key);
 
 	/* Step through the bin, looking for our value. */
 	current = hashtable->table[bin];
@@ -98,7 +97,7 @@ void* ht_get(Hashtable *hashtable, char *key) {
 		prev = current;
 		current = current->next;
 	}
-
+    
 	/* Did we actually find anything? */
 	if (current == NULL) {
 		return NULL;

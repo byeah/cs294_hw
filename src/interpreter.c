@@ -5,7 +5,7 @@
 #include "ast.h"
 #include "interpreter.h"
 
-#define DEBUG
+//#define DEBUG
 
 
 int obj_type(Obj* o) {
@@ -91,7 +91,10 @@ Obj* array_get(ArrayObj* a, IntObj* i) {
 EnvObj* make_env_obj(Obj* parent) {
     EnvObj* env = malloc(sizeof(EnvObj));
     env->type = Env;
-    env->table = ht_create(1007);
+    if (parent == NULL || parent->type == Null)
+        env->table = ht_create(1007);
+    else
+        env->table = ht_copy(((EnvObj*)parent)->table);
     return env;
 }
 
@@ -123,6 +126,9 @@ Entry* make_func_entry(ScopeStmt* s, int nargs, char** args) {
 Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
     switch (e->tag) {
         case INT_EXP: {
+#ifdef DEBUG
+			printf("debug: INT\n");
+#endif
             IntExp* e2 = (IntExp*)e;
             return (Obj*)make_int_obj(e2->value);
         }
@@ -176,6 +182,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)obj;
         }
         case SLOT_EXP: {
+#ifdef DEBUG
+			printf("debug: Slot exp\n");
+#endif
             SlotExp* e2 = (SlotExp*)e;
             Obj* obj = eval_exp(genv, env, e2->exp);
             if (obj->type != Env){
@@ -212,7 +221,7 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 printf("Error: %s should be Var in the object\n",e2->name);
                 exit(-1);
             }
-            add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env,e2->exp)));
+            add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env,e2->value)));
             return (Obj*)make_null_obj();
         }
         case CALL_SLOT_EXP: {
@@ -299,7 +308,6 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
 #ifdef DEBUG
 			printf("debug: CALL\n");
 #endif
-
             CallExp* e2 = (CallExp*)e;
 #ifdef DEBUG
 			printf("debug: %s\n",e2->name);
@@ -325,9 +333,12 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return eval_stmt(genv, new_env, func->body);
         }
         case SET_EXP: {
+#ifdef DEBUG
+			printf("debug: SET\n");
+#endif
             SetExp* e2 = (SetExp*)e;
             Obj* res = eval_exp(genv, env, e2->exp);
-            if (get_entry(env, e2->name)!=NULL){
+            if (env != NULL && get_entry(env, e2->name)!=NULL){
                 add_entry(env, e2->name, make_var_entry(res));
             }
             else
