@@ -5,7 +5,7 @@
 #include "ast.h"
 #include "interpreter.h"
 
-#define DEBUG;
+#define DEBUG
 
 
 int obj_type(Obj* o) {
