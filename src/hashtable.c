@@ -152,3 +152,29 @@ void ht_clear(Hashtable *hashtable) {
 		hashtable->table[i] = NULL;
 	}
 }
+
+Hashtable* ht_copy(Hashtable *hashtable) {
+	Hashtable* copy = NULL;
+
+	if ((copy = ht_create(hashtable->size) == NULL)) {
+		return NULL;
+	}
+
+	for (int i = 0; i < hashtable->size; ++i) {
+		entry_t* source = hashtable->table[i];
+		entry_t* dest = NULL;
+		while (source != NULL) {
+			entry_t* newpair = ht_newpair(source->key, source->value);
+			if (dest == NULL) {
+				copy->table[i] = newpair;
+			} 
+			else {
+				dest->next = newpair;
+			}
+			dest = newpair;
+			source = source->next;
+		}
+	}
+
+	return copy;
+}

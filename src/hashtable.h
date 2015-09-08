@@ -22,5 +22,6 @@ void ht_put(Hashtable* hashtable, char* key, void* value);
 void* ht_get(Hashtable *hashtable, char *key);
 void ht_remove(Hashtable *hashtable, char *key);
 void ht_clear(Hashtable *hashtable);
+Hashtable* ht_copy(Hashtable *hashtable);
 
 #endif
