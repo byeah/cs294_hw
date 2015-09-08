@@ -92,6 +92,8 @@ Entry* make_var_entry(Obj* obj);
 Entry* make_func_entry(ScopeStmt*, int,char**);
 
 
+void exec_slotstmt (EnvObj* genv, EnvObj* env, EnvObj* obj, SlotStmt* s);
+
 void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s);
 Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s);
 
