@@ -5,7 +5,7 @@
 #include "ast.h"
 #include "interpreter.h"
 
-bool debug=false;
+#define DEBUG;
 
 
 int obj_type(Obj* o) {
@@ -173,7 +173,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)make_null_obj();
         }
         case SET_SLOT_EXP: {
-            if (debug) printf("debug: Slot Set\n");
+#ifdef DEBUG
+			printf("debug: Slot Set\n");
+#endif
             SetSlotExp* e2 = (SetSlotExp*)e;
             print_exp(e2->exp);
             printf(".%s = \n", e2->name);
@@ -181,9 +183,13 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)make_null_obj();
         }
         case CALL_SLOT_EXP: {
-            if (debug) printf("debug: Slot Call\n");
+#ifdef DEBUG
+			printf("debug: Slot Call\n");
+#endif
             CallSlotExp* e2 = (CallSlotExp*)e;
-            if (debug) printf("debug: Calling %s\n",e2->name);
+#ifdef DEBUG
+            printf("debug: Calling %s\n",e2->name);
+#endif
             Obj* obj = eval_exp(genv, env, e2->exp);
 //            return (Obj*)make_null_obj();
             if (obj->type == Int){
@@ -280,7 +286,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)make_null_obj();
         }
         case IF_EXP: {
-            if (debug) printf("debug: If\n");
+#ifdef DEBUG 
+			printf("debug: If\n");
+#endif
             IfExp* e2 = (IfExp*)e;
             Obj* pred = eval_exp(genv, env, e2->pred);
             if (pred->type == Null)
@@ -289,7 +297,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 return eval_stmt(genv, env, e2->conseq);
         }
         case WHILE_EXP: {
-            if (debug) printf("debug: While\n");
+#ifdef DEBUG
+			printf("debug: While\n");
+#endif
             WhileExp* e2 = (WhileExp*)e;
             while (eval_exp(genv, env, e2->pred)->type == Int) {
                 eval_stmt(genv, env, e2->body);
@@ -297,7 +307,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)make_null_obj();
         }
         case REF_EXP: {
-            if (debug) printf("debug: REF\n");
+#ifdef DEBUG
+			printf("debug: REF\n");
+#endif
             RefExp* e2 = (RefExp*)e;
             Entry* ent = NULL;
             if (env != NULL)
@@ -338,13 +350,17 @@ void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
             break;
         }
         case FN_STMT: {
-            if (debug) printf("debug: FN\n");
+#ifdef DEBUG
+			printf("debug: FN\n");
+#endif
             ScopeFn* s2 = (ScopeFn*)s;
             add_entry(genv, s2->name, make_func_entry(s2->body,s2->nargs,s2->args));
             break;
         }
 		case SEQ_STMT: {
-            if (debug) printf("debug: SEQ\n");
+#ifdef DEBUG
+			printf("debug: SEQ\n");
+#endif
             ScopeSeq* s2 = (ScopeSeq*)s;
             exec_stmt(genv, env, s2->a);
             exec_stmt(genv, env, s2->b);
@@ -364,9 +380,13 @@ void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
 Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
     switch (s->tag) {
         case VAR_STMT: {
-            if (debug) printf("debug: Var\n");
+#ifdef DEBUG
+			printf("debug: Var\n");
+#endif
             ScopeVar* s2 = (ScopeVar*)s;
-            if (debug) printf("debug: %s\n",s2->name);
+#ifdef DEBUG
+			printf("debug: %s\n", s2->name);
+#endif
             if (env == NULL)
                 add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
             else
@@ -374,19 +394,25 @@ Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
             return (Obj*)make_null_obj();
         }
         case FN_STMT: {
-            if (debug) printf("debug: FN\n");
+#ifdef DEBUG
+			printf("debug: FN\n");
+#endif
             ScopeFn* s2 = (ScopeFn*)s;
             add_entry(genv, s2->name, make_func_entry(s2->body,s2->nargs,s2->args));
             return (Obj*)make_null_obj();
         }
 		case SEQ_STMT: {
-            if (debug) printf("debug: SEQ\n");
+#ifdef DEBUG
+			printf("debug: SEQ\n");
+#endif
             ScopeSeq* s2 = (ScopeSeq*)s;
             eval_stmt(genv, env, s2->a);
             return eval_stmt(genv, env, s2->b);
         }
         case EXP_STMT: {
-            if (debug) printf("debug: EXP\n");
+#ifdef DEBUG
+            printf("debug: EXP\n");
+#endif
             ScopeExp* s2 = (ScopeExp*)s;
             return eval_exp(genv, env, s2->exp);
         }
