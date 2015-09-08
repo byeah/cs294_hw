@@ -5,6 +5,9 @@
 #include "ast.h"
 #include "interpreter.h"
 
+bool debug=false;
+
+
 int obj_type(Obj* o) {
 	return o->type;
 }
@@ -116,6 +119,7 @@ Entry* make_func_entry(ScopeStmt* s, int nargs, char** args) {
     return (Entry*) e;
 }
 
+
 Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
     switch (e->tag) {
         case INT_EXP: {
@@ -131,7 +135,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             print_string(e2->format);
             for (int i = 0; i < e2->nexps; i++) {
                 printf(", ");
-                //print_exp(e2->exps[i]);
+                Obj* obj=eval_exp(genv, env, e2->exps[i]);
+                if (obj->type == Int)
+                    printf("%d",((IntObj*)obj)->value);
             }
             printf(")\n");
             return (Obj*)make_null_obj();
@@ -162,25 +168,76 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
         }
         case SLOT_EXP: {
             SlotExp* e2 = (SlotExp*)e;
-            //print_exp(e2->exp);
+            print_exp(e2->exp);
             printf(".%s\n", e2->name);
             return (Obj*)make_null_obj();
         }
         case SET_SLOT_EXP: {
+            if (debug) printf("debug: Slot Set\n");
             SetSlotExp* e2 = (SetSlotExp*)e;
-            //print_exp(e2->exp);
+            print_exp(e2->exp);
             printf(".%s = \n", e2->name);
             //print_exp(e2->value);
             return (Obj*)make_null_obj();
         }
         case CALL_SLOT_EXP: {
+            if (debug) printf("debug: Slot Call\n");
             CallSlotExp* e2 = (CallSlotExp*)e;
-            //print_exp(e2->exp);
-            printf(".%s(", e2->name);
+            if (debug) printf("debug: Calling %s\n",e2->name);
+            Obj* obj = eval_exp(genv, env, e2->exp);
+//            return (Obj*)make_null_obj();
+            if (obj->type == Int){
+                IntObj* iobj = (IntObj*) obj;
+                Obj* para = eval_exp(genv, env, e2->args[0]);
+                if (para->type != Int){
+                    printf("Error: Operand %s to Int must be Int\n",e2->name);
+                    exit(-1);
+                }
+                IntObj* ipara = (IntObj*) para;
+                if (strcmp(e2->name, "add") == 0)
+                    return (Obj*)add(iobj, ipara);
+                if (strcmp(e2->name, "sub") == 0)
+                    return (Obj*)subtract(iobj, ipara);
+                if (strcmp(e2->name, "mul") == 0)
+                    return (Obj*)multiply(iobj, ipara);
+                if (strcmp(e2->name, "div") == 0)
+                    return (Obj*)divide(iobj, ipara);
+                if (strcmp(e2->name, "mod") == 0)
+                    return (Obj*)modulo(iobj, ipara);
+                if (strcmp(e2->name, "lt") == 0)
+                    return (Obj*)lt(iobj, ipara);
+                if (strcmp(e2->name, "gt") == 0)
+                    return (Obj*)gt(iobj, ipara);
+                if (strcmp(e2->name, "le") == 0)
+                    return (Obj*)le(iobj, ipara);
+                if (strcmp(e2->name, "ge") == 0)
+                    return (Obj*)ge(iobj, ipara);
+                if (strcmp(e2->name, "eq") == 0)
+                    return (Obj*)eq(iobj, ipara);
+                printf("Error: Operator %s not recognized\n",e2->name);
+                exit(-1);
+            }
+            if (obj->type == Array){
+                ArrayObj* aobj = (ArrayObj*) obj;
+//                printf("%s %d\n",e2->name,e2->nargs);
+                if (strcmp(e2->name, "length") == 0)
+                    return (Obj*)array_length(aobj);
+                IntObj* index = (IntObj*)eval_exp(genv, env, e2->args[0]);
+                if (strcmp(e2->name, "set") == 0){
+                    array_set(aobj, index, eval_exp(genv, env, e2->args[1]));
+                    return (Obj*)make_null_obj();
+                }
+                if (strcmp(e2->name, "get") == 0)
+                    return array_get(aobj, index);
+                printf("Error: Operator %s not recognized\n",e2->name);
+                exit(-1);
+            }
             for (int i = 0; i < e2->nargs; i++) {
                 if (i > 0) printf(", ");
                 //print_exp(e2->args[i]);
             }
+            print_exp(e2->exp);
+            printf(".%s(", e2->name);
             printf(")");
             return (Obj*)make_null_obj();
         }
@@ -223,7 +280,7 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)make_null_obj();
         }
         case IF_EXP: {
-            printf("Debug: If\n");
+            if (debug) printf("debug: If\n");
             IfExp* e2 = (IfExp*)e;
             Obj* pred = eval_exp(genv, env, e2->pred);
             if (pred->type == Null)
@@ -232,7 +289,7 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 return eval_stmt(genv, env, e2->conseq);
         }
         case WHILE_EXP: {
-            printf("Debug: While\n");
+            if (debug) printf("debug: While\n");
             WhileExp* e2 = (WhileExp*)e;
             while (eval_exp(genv, env, e2->pred)->type == Int) {
                 eval_stmt(genv, env, e2->body);
@@ -240,9 +297,12 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             return (Obj*)make_null_obj();
         }
         case REF_EXP: {
+            if (debug) printf("debug: REF\n");
             RefExp* e2 = (RefExp*)e;
-            Entry* ent;
-            if ((ent = get_entry(env, e2->name))==NULL)
+            Entry* ent = NULL;
+            if (env != NULL)
+                ent = get_entry(env, e2->name);
+            if (ent == NULL)
                 ent = get_entry(genv, e2->name);
             if (ent == NULL) {
                 printf("Error: variable not found when referring\n");
@@ -259,6 +319,10 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             exit(-1);
 	}
     return NULL;
+}
+
+
+void exec_slotstmt (EnvObj* genv, EnvObj* env, EnvObj* obj, SlotStmt* s) {
     
 }
 
@@ -267,17 +331,20 @@ void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
     switch (s->tag) {
         case VAR_STMT: {
             ScopeVar* s2 = (ScopeVar*)s;
-            add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
+            if (env == NULL)
+                add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
+            else
+                add_entry(env, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
             break;
         }
         case FN_STMT: {
-            printf("Debug: FN\n");
+            if (debug) printf("debug: FN\n");
             ScopeFn* s2 = (ScopeFn*)s;
             add_entry(genv, s2->name, make_func_entry(s2->body,s2->nargs,s2->args));
             break;
         }
 		case SEQ_STMT: {
-            printf("Debug: SEQ\n");
+            if (debug) printf("debug: SEQ\n");
             ScopeSeq* s2 = (ScopeSeq*)s;
             exec_stmt(genv, env, s2->a);
             exec_stmt(genv, env, s2->b);
@@ -297,25 +364,29 @@ void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
 Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
     switch (s->tag) {
         case VAR_STMT: {
-            printf("Debug: Var\n");
+            if (debug) printf("debug: Var\n");
             ScopeVar* s2 = (ScopeVar*)s;
-            add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
+            if (debug) printf("debug: %s\n",s2->name);
+            if (env == NULL)
+                add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
+            else
+                add_entry(env, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
             return (Obj*)make_null_obj();
         }
         case FN_STMT: {
-            printf("Debug: FN\n");
+            if (debug) printf("debug: FN\n");
             ScopeFn* s2 = (ScopeFn*)s;
             add_entry(genv, s2->name, make_func_entry(s2->body,s2->nargs,s2->args));
             return (Obj*)make_null_obj();
         }
 		case SEQ_STMT: {
-            printf("Debug: SEQ\n");
+            if (debug) printf("debug: SEQ\n");
             ScopeSeq* s2 = (ScopeSeq*)s;
             eval_stmt(genv, env, s2->a);
             return eval_stmt(genv, env, s2->b);
         }
         case EXP_STMT: {
-            printf("Debug: EXP\n");
+            if (debug) printf("debug: EXP\n");
             ScopeExp* s2 = (ScopeExp*)s;
             return eval_exp(genv, env, s2->exp);
         }
@@ -329,7 +400,7 @@ void interpret(ScopeStmt* s) {
 	/*printf("Interpret program:\n");
 	print_scopestmt(s);
 	printf("\n");*/
-    eval_stmt(make_env_obj(NULL), make_env_obj(NULL), s);
+    eval_stmt(make_env_obj(NULL), NULL, s);
 }
 
 
