@@ -92,7 +92,7 @@ EnvObj* make_env_obj(Obj* parent) {
     EnvObj* env = malloc(sizeof(EnvObj));
     env->type = Env;
     if (parent == NULL || parent->type == Null)
-        env->table = ht_create(1007);
+        env->table = ht_create(107);
     else
         env->table = ht_copy(((EnvObj*)parent)->table);
     return env;
@@ -303,7 +303,10 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 add_entry(new_env, func->args[i], make_var_entry(eval_exp(genv, env, e2->args[i])));
             }
             add_entry(new_env, "this", make_var_entry(obj));
-            return eval_stmt(genv, new_env, func->body);
+            Obj* res = eval_stmt(genv, new_env, func->body);
+            ht_clear(new_env->table);
+            free(new_env);
+            return res;
         }
         case CALL_EXP: {
 #ifdef DEBUG
@@ -331,7 +334,10 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             for (int i = 0; i < e2->nargs; i++) {
                 add_entry(new_env, func->args[i], make_var_entry(eval_exp(genv, env, e2->args[i])));
             }
-            return eval_stmt(genv, new_env, func->body);
+            Obj* res = eval_stmt(genv, new_env, func->body);
+            ht_clear(new_env->table);
+            free(new_env);
+            return res;
         }
         case SET_EXP: {
 #ifdef DEBUG
