@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#define KEYLEN 128
+
 struct entry_s {
 	char* key;
 	void* value;

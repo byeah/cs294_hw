@@ -44,9 +44,13 @@ entry_t* ht_newpair(char *key, void *value) {
 	if ((newpair = malloc(sizeof(entry_t))) == NULL) {
 		return NULL;
 	}
+	// No longer duplicate key string. Use it at your own risk :)
+	/*
 	if ((newpair->key = strdup(key)) == NULL) {
 		return NULL;
 	}
+	*/
+	newpair->key = key;
 	newpair->value = value;
 	newpair->next = NULL;
 	return newpair;
@@ -67,7 +71,6 @@ void ht_put(Hashtable* hashtable, char* key, void* value) {
 
 	/* There's already a pair.  Let's replace that string. */
 	if (current != NULL) {
-		//free(next->value);
 		current->value = value;
 	}
 	/* Nope, could't find it.  Time to grow a pair. */
@@ -134,7 +137,7 @@ void ht_remove(Hashtable *hashtable, char *key) {
 		else {
 			prev->next = current->next;
 		}
-		free(current->key);
+		// free(current->key);
 		free(current);
 	}
 }
@@ -144,7 +147,7 @@ void ht_clear(Hashtable *hashtable) {
 		entry_t* current = hashtable->table[i];
 		while (current != NULL) {
 			entry_t* temp = current->next;
-			free(current->key);
+			//free(current->key);
 			free(current);
 			current = temp;
 		}
