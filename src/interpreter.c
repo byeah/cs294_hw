@@ -143,7 +143,7 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 if (obj->type == Int)
                     res[i] = ((IntObj*)obj)->value;
                 else{
-                    printf("Error: Can only print Int objects\n");
+                    printf("Error: Can only print Int objects.\n");
                     exit(-1);
                 }
             }
@@ -158,13 +158,13 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
         case ARRAY_EXP: {
             ArrayExp* e2 = (ArrayExp*)e;
             Obj* length = eval_exp(genv, env, e2->length);
-            if (length->type!=Int) {
-                printf("Error: array length is not int\n");
+            if (length->type != Int) {
+                printf("Error: array length is not int.\n");
                 exit(-1);
             }
             Obj* init = eval_exp(genv, env, e2->init);
-            if (init->type!=Int) {
-                printf("Error: array init value is not int\n");
+            if (init->type != Int) {
+                printf("Error: array init value is not int.\n");
                 exit(-1);
             }
             return (Obj*)make_array_obj((IntObj*)length, init);
@@ -173,7 +173,6 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
 #ifdef DEBUG
 			printf("debug: OBJECT\n");
 #endif
-
             ObjectExp* e2 = (ObjectExp*)e;
             EnvObj* obj = make_env_obj(eval_exp(genv, env, e2->parent));
             for (int i = 0; i < e2->nslots; i++) {
@@ -188,16 +187,16 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             SlotExp* e2 = (SlotExp*)e;
             Obj* obj = eval_exp(genv, env, e2->exp);
             if (obj->type != Env){
-                printf("Error: Accessing %s from a non-object value\n",e2->name);
+                printf("Error: Accessing %s from a non-object value.\n", e2->name);
                 exit(-1);
             }
             Entry* ent = get_entry((EnvObj*)obj, e2->name);
             if (ent == NULL){
-                printf("Error: %s is not found in the object\n",e2->name);
+                printf("Error: %s is not found in the object.\n", e2->name);
                 exit(-1);
             }
             if (ent->type != Var){
-                printf("Error: %s should be Var in the object\n",e2->name);
+                printf("Error: %s should be Var in the object.\n", e2->name);
                 exit(-1);
             }
             return ((VarEntry*)ent)->value;
@@ -209,19 +208,19 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             SetSlotExp* e2 = (SetSlotExp*)e;
             Obj* obj = eval_exp(genv, env, e2->exp);
             if (obj->type != Env){
-                printf("Error: Accessing %s from a non-object value\n",e2->name);
+                printf("Error: Accessing %s from a non-object value.\n", e2->name);
                 exit(-1);
             }
             Entry* ent = get_entry((EnvObj*)obj, e2->name);
             if (ent == NULL){
-                printf("Error: %s is not found in the object\n",e2->name);
+                printf("Error: %s is not found in the object.\n", e2->name);
                 exit(-1);
             }
             if (ent->type != Var){
-                printf("Error: %s should be Var in the object\n",e2->name);
+                printf("Error: %s should be Var in the object.\n", e2->name);
                 exit(-1);
             }
-            add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env,e2->value)));
+            add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env, e2->value)));
             return (Obj*)make_null_obj();
         }
         case CALL_SLOT_EXP: {
@@ -237,7 +236,7 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 IntObj* iobj = (IntObj*) obj;
                 Obj* para = eval_exp(genv, env, e2->args[0]);
                 if (para->type != Int){
-                    printf("Error: Operand %s to Int must be Int\n",e2->name);
+                    printf("Error: Operand %s to Int must be Int.\n",e2->name);
                     exit(-1);
                 }
                 IntObj* ipara = (IntObj*) para;
@@ -261,9 +260,10 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                     return (Obj*)ge(iobj, ipara);
                 if (strcmp(e2->name, "eq") == 0)
                     return (Obj*)eq(iobj, ipara);
-                printf("Error: Operator %s not recognized\n",e2->name);
+                printf("Error: Operator %s not recognized.\n", e2->name);
                 exit(-1);
             }
+
             if (obj->type == Array){
                 ArrayObj* aobj = (ArrayObj*) obj;
                 if (strcmp(e2->name, "length") == 0)
@@ -275,26 +275,27 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 }
                 if (strcmp(e2->name, "get") == 0)
                     return array_get(aobj, index);
-                printf("Error: Operator %s not recognized\n",e2->name);
+                printf("Error: Operator %s not recognized.\n", e2->name);
                 exit(-1);
             }
             
             if (obj->type != Env){
-                printf("Error: Calling %s from a NULL pointer\n",e2->name);
+                printf("Error: Calling %s from a NULL reference.\n", e2->name);
                 exit(-1);
             }
+
             Entry* ent = get_entry((EnvObj*)obj, e2->name);
             if (ent == NULL) {
-                printf("Error: Function %s not found\n",e2->name);
+                printf("Error: Function %s not found.\n",e2->name);
                 exit(-1);
             }
             if (ent->type != Func) {
-                printf("Error: Calling %s that is not a Function in the object \n",e2->name);
+                printf("Error: Calling %s that is not a Function in the object.\n",e2->name);
                 exit(-1);
             }
             FuncEntry* func = (FuncEntry*)ent;
             if (e2->nargs != func->nargs){
-                printf("Error: Args number not match when calling object method %s . Giving %d while %d is required\n",e2->name,e2->nargs,func->nargs);
+                printf("Error: Args number not match when calling object method %s. Giving %d while %d is required.\n",e2->name,e2->nargs,func->nargs);
                 exit(-1);
             }
             EnvObj* new_env = make_env_obj(NULL);
@@ -323,7 +324,7 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
             }
             FuncEntry* func = (FuncEntry*)ent;
             if (e2->nargs != func->nargs){
-                printf("Error: Args number not match when calling %s . Giving %d while %d is required\n",e2->name,e2->nargs,func->nargs);
+                printf("Error: Args number not match when calling %s. Giving %d while %d is required.\n",e2->name,e2->nargs,func->nargs);
                 exit(-1);
             }
             EnvObj* new_env = make_env_obj(NULL);
@@ -338,18 +339,18 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
 #endif
             SetExp* e2 = (SetExp*)e;
             Obj* res = eval_exp(genv, env, e2->exp);
-            if (env != NULL && get_entry(env, e2->name)!=NULL){
+            if (env != NULL && get_entry(env, e2->name) != NULL){
                 add_entry(env, e2->name, make_var_entry(res));
             }
             else
-                if (get_entry(genv, e2->name)!=NULL){
+                if (get_entry(genv, e2->name) != NULL){
                     add_entry(genv, e2->name, make_var_entry(res));
                 }
                 else {
                     printf("Error: variable not found when setting its value\n");
                     exit(-1);
                 }
-            return (Obj*)make_null_obj();
+            return NULL;
         }
         case IF_EXP: {
 #ifdef DEBUG 
@@ -470,7 +471,7 @@ Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
                 add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
             else
                 add_entry(env, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
-            return (Obj*)make_null_obj();
+            return NULL;
         }
         case FN_STMT: {
 #ifdef DEBUG
@@ -478,7 +479,7 @@ Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
 #endif
             ScopeFn* s2 = (ScopeFn*)s;
             add_entry(genv, s2->name, make_func_entry(s2->body,s2->nargs,s2->args));
-            return (Obj*)make_null_obj();
+            return NULL;
         }
 		case SEQ_STMT: {
 #ifdef DEBUG
