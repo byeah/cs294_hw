@@ -6,17 +6,17 @@
 #define KEYLEN 128
 
 struct entry_s {
-	char* key;
-	void* value;
-	struct entry_s* next;
+    char* key;
+    void* value;
+    struct entry_s* next;
 };
 
 typedef struct entry_s entry_t;
 
 struct hashtable_s {
-	int size;
-	struct entry_s** table;
-	struct hashtable_s* parent;
+    int size;
+    struct entry_s** table;
+    struct hashtable_s* parent;
 };
 
 typedef struct hashtable_s Hashtable;

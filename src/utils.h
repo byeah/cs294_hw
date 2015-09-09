@@ -13,9 +13,9 @@ void print_string(char* str);
 //============================================================
 
 typedef struct {
-	int size;
-	int capacity;
-	void** array;
+    int size;
+    int capacity;
+    void** array;
 } Vector;
 
 Vector* make_vector();

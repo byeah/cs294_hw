@@ -38,7 +38,7 @@ Obj* ge(IntObj* x, IntObj *y);
 // Null Objects
 
 typedef struct {
-	ObjType type;
+    ObjType type;
 } NullObj;
 
 NullObj* make_null_obj();
@@ -59,29 +59,29 @@ Obj* array_get(ArrayObj* a, IntObj* i);
 // Environment Objects
 
 typedef enum {
-	Var,
-	Func
+    Var,
+    Func
 } EntryType;
 
 typedef struct {
-	EntryType type;
+    EntryType type;
 } Entry;
 
 typedef struct {
-	EntryType type;
-	Obj* value;
+    EntryType type;
+    Obj* value;
 } VarEntry;
 
 typedef struct {
-	EntryType type;
-	ScopeStmt* body;
-	int nargs;
-	char** args;
+    EntryType type;
+    ScopeStmt* body;
+    int nargs;
+    char** args;
 } FuncEntry;
 
 typedef struct {
-	ObjType type;
-	Hashtable* table;
+    ObjType type;
+    Hashtable* table;
 } EnvObj;
 
 EnvObj* make_env_obj(Obj* parent);
@@ -89,16 +89,16 @@ void add_entry(EnvObj* env, char* name, Entry* entry);
 Entry* get_entry(EnvObj* env, char* name);
 
 Entry* make_var_entry(Obj* obj);
-Entry* make_func_entry(ScopeStmt*, int,char**);
+Entry* make_func_entry(ScopeStmt*, int, char**);
 
-void exec_slotstmt (EnvObj* genv, EnvObj* env, EnvObj* obj, SlotStmt* s);
+void exec_slotstmt(EnvObj* genv, EnvObj* env, EnvObj* obj, SlotStmt* s);
 
-void exec_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s);
-Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s);
+void exec_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s);
+Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s);
 
-Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* exp);
+Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* exp);
 
-void interpret (ScopeStmt* stmt);
+void interpret(ScopeStmt* stmt);
 
 #endif
 
