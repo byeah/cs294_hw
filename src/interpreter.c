@@ -92,7 +92,7 @@ EnvObj* make_env_obj(Obj* parent) {
     EnvObj* env = malloc(sizeof(EnvObj));
     env->type = Env;
     if (parent == NULL || parent->type == Null)
-        env->table = ht_create(107);
+        env->table = ht_create(11);
     else
         env->table = ht_copy(((EnvObj*)parent)->table);
     return env;
@@ -137,9 +137,9 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
         }
         case PRINTF_EXP: {
             PrintfExp* e2 = (PrintfExp*)e;
-            int* res = malloc(sizeof(int)*(e2->nexps+1));
+            int* res = malloc(sizeof(int) * (e2->nexps + 1));
             for (int i = 0; i < e2->nexps; i++) {
-                Obj* obj=eval_exp(genv, env, e2->exps[i]);
+                Obj* obj = eval_exp(genv, env, e2->exps[i]);
                 if (obj->type == Int)
                     res[i] = ((IntObj*)obj)->value;
                 else{
@@ -148,11 +148,11 @@ Obj* eval_exp (EnvObj* genv, EnvObj* env, Exp* e) {
                 }
             }
             int cur = 0;
-            for(char* p = e2->format;*p;p++)
-                if (*p!='~')
-                    printf("%c",*p);
+            for (char* p = e2->format;*p;p++)
+                if (*p != '~')
+                    printf("%c", *p);
                 else
-                    printf("%d",res[cur++]);
+                    printf("%d", res[cur++]);
             return (Obj*)make_null_obj();
         }
         case ARRAY_EXP: {
@@ -509,9 +509,6 @@ Obj* eval_stmt (EnvObj* genv, EnvObj* env, ScopeStmt* s) {
 }
 
 void interpret(ScopeStmt* s) {
-	/*printf("Interpret program:\n");
-	print_scopestmt(s);
-	printf("\n");*/
     eval_stmt(make_env_obj(NULL), NULL, s);
 }
 

@@ -23,6 +23,7 @@ Hashtable* ht_create(int size) {
 	}
 
 	hashtable->size = size;
+	hashtable->parent = NULL;
 
 	return hashtable;
 }
@@ -88,11 +89,9 @@ void ht_put(Hashtable* hashtable, char* key, void* value) {
 	}
 }
 
-void* ht_get(Hashtable *hashtable, char *key) {
-	int bin = 0;
+void* ht_get_local(Hashtable *hashtable, char *key, int bin) {
 	entry_t* current = NULL;
 	entry_t* prev = NULL;
-    bin = ht_hash(hashtable, key);
 
 	/* Step through the bin, looking for our value. */
 	current = hashtable->table[bin];
@@ -108,6 +107,19 @@ void* ht_get(Hashtable *hashtable, char *key) {
 	else {
 		return current->value;
 	}
+}
+
+void* ht_get(Hashtable *hashtable, char *key) {
+	int bin = ht_hash(hashtable, key);
+	Hashtable *current = hashtable;
+	while (current != NULL) {
+		void *result = ht_get_local(current, key, bin);
+		if (result != NULL)
+			return result;
+		else
+			current = current->parent;
+	}
+	return NULL;
 }
 
 void ht_remove(Hashtable *hashtable, char *key) {
@@ -162,21 +174,7 @@ Hashtable* ht_copy(Hashtable *hashtable) {
 		return NULL;
 	}
 
-	for (int i = 0; i < hashtable->size; ++i) {
-		entry_t* source = hashtable->table[i];
-		entry_t* dest = NULL;
-		while (source != NULL) {
-			entry_t* newpair = ht_newpair(source->key, source->value);
-			if (dest == NULL) {
-				copy->table[i] = newpair;
-			} 
-			else {
-				dest->next = newpair;
-			}
-			dest = newpair;
-			source = source->next;
-		}
-	}
+	copy->parent = hashtable;
 
 	return copy;
 }

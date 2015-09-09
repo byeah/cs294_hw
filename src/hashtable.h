@@ -13,10 +13,13 @@ struct entry_s {
 
 typedef struct entry_s entry_t;
 
-typedef struct {
+struct hashtable_s {
 	int size;
 	struct entry_s** table;
-} Hashtable;
+	struct hashtable_s* parent;
+};
+
+typedef struct hashtable_s Hashtable;
 
 Hashtable* ht_create(int size);
 
