@@ -10,13 +10,33 @@
 #define inline __inline
 #endif
 
+#ifdef WIN32
+
+#include <windows.h>
+#define TIME_T LARGE_INTEGER 
+#define FREQ_T LARGE_INTEGER 
+#define TIME(t) QueryPerformanceCounter(&(t))
+#define FREQ(f) QueryPerformanceFrequency(&(f))
+#define ELASPED_TIME(t1, t2, freq) ((t2).QuadPart - (t1).QuadPart) * 1000.0 / (freq).QuadPart
+
+#else
+
+#include <sys/time.h>  
+#define TIME_T struct timeval 
+#define FREQ_T double 
+#define TIME(t) gettimeofday(&(t), NULL)
+#define FREQ(f) 1.0
+#define ELASPED_TIME(t1, t2, freq) ((t2).tv_sec - (t1).tv_sec) * 1000.0 + ((t2).tv_usec - (t1).tv_usec) / 1000.0
+
+#endif
+
+
 static int int_calls = 0;
 static int array_calls = 0;
 static int env_calls = 0;
-static int other_calls = 0;
 
-static int lookup_time = 0;
-static int total_time = 0;
+static double lookup_time_in_ms = 0.0;
+static double total_time_in_ms = 0.0;
 
 inline
 int obj_type(Obj* o) {
@@ -133,7 +153,18 @@ void add_entry(EnvObj* env, char* name, Entry* entry) {
 
 inline
 Entry* get_entry(EnvObj* env, char* name) {
-    return (Entry*)ht_get(env->table, name);
+    TIME_T t1, t2;
+    FREQ_T freq;
+
+    FREQ(freq);
+    TIME(t1);
+
+    Entry* entry = (Entry*)ht_get(env->table, name);
+
+    TIME(t2);
+    lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
+
+    return entry;
 }
 
 inline
@@ -554,8 +585,28 @@ Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s) {
     }
 }
 
+void print_stats() {
+    fprintf(stderr, "int calls: %d.\n", int_calls);
+    fprintf(stderr, "array calls: %d.\n", array_calls);
+    fprintf(stderr, "env calls: %d.\n", env_calls);
+    fprintf(stderr, "total method calls: %d.\n", int_calls + array_calls + env_calls);
+    fprintf(stderr, "lookup time: %f ms.\n", lookup_time_in_ms);
+    fprintf(stderr, "total time: %f ms.\n", total_time_in_ms);
+}
+
 void interpret(ScopeStmt* s) {
+    TIME_T t1, t2;
+    FREQ_T freq;
+
+    FREQ(freq);
+    TIME(t1);
+
     eval_stmt(make_env_obj(NULL), NULL, s);
+
+    TIME(t2);
+    total_time_in_ms += ELASPED_TIME(t1, t2, freq);
+
+    print_stats();
 }
 
 
