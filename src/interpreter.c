@@ -43,6 +43,8 @@ static int env_count = 0;
 static double lookup_time_in_ms = 0.0;
 static double total_time_in_ms = 0.0;
 
+static NullObj null_obj_singleton = { .type = Null };
+
 inline
 int obj_type(Obj* o) {
     return o->type;
@@ -109,10 +111,7 @@ Obj* ge(IntObj* x, IntObj *y) {
 
 inline
 NullObj* make_null_obj() {
-    ++ null_count;
-    NullObj* o = malloc(sizeof(NullObj));
-    o->type = Null;
-    return o;
+    return &null_obj_singleton;
 }
 
 inline
@@ -563,7 +562,7 @@ Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s) {
             add_entry(genv, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
         else
             add_entry(env, s2->name, make_var_entry(eval_exp(genv, env, s2->exp)));
-        return NULL;
+        return (Obj*)make_null_obj();
     }
     case FN_STMT: {
 #ifdef DEBUG
@@ -571,7 +570,7 @@ Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s) {
 #endif
         ScopeFn* s2 = (ScopeFn*)s;
         add_entry(genv, s2->name, make_func_entry(s2->body, s2->nargs, s2->args));
-        return NULL;
+        return (Obj*)make_null_obj();
     }
     case SEQ_STMT: {
 #ifdef DEBUG
