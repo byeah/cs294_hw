@@ -35,6 +35,11 @@ static int int_calls = 0;
 static int array_calls = 0;
 static int env_calls = 0;
 
+static int int_count = 0;
+static int array_count = 0;
+static int null_count = 0;
+static int env_count = 0;
+
 static double lookup_time_in_ms = 0.0;
 static double total_time_in_ms = 0.0;
 
@@ -45,6 +50,7 @@ int obj_type(Obj* o) {
 
 inline
 IntObj* make_int_obj(int value) {
+    ++ int_count;
     IntObj* o = malloc(sizeof(IntObj));
     o->type = Int;
     o->value = value;
@@ -103,6 +109,7 @@ Obj* ge(IntObj* x, IntObj *y) {
 
 inline
 NullObj* make_null_obj() {
+    ++ null_count;
     NullObj* o = malloc(sizeof(NullObj));
     o->type = Null;
     return o;
@@ -110,6 +117,7 @@ NullObj* make_null_obj() {
 
 inline
 ArrayObj* make_array_obj(IntObj *length, Obj* init) { //Assume init is IntObj
+    ++ array_count;
     ArrayObj* o = malloc(sizeof(ArrayObj));
     o->type = Array;
     o->length = length->value;
@@ -137,6 +145,7 @@ Obj* array_get(ArrayObj* a, IntObj* i) {
 
 inline
 EnvObj* make_env_obj(Obj* parent) {
+    ++ env_count;
     EnvObj* env = malloc(sizeof(EnvObj));
     env->type = Env;
     if (parent == NULL || parent->type == Null)
@@ -590,6 +599,13 @@ void print_stats() {
     fprintf(stderr, "array calls: %d.\n", array_calls);
     fprintf(stderr, "env calls: %d.\n", env_calls);
     fprintf(stderr, "total method calls: %d.\n", int_calls + array_calls + env_calls);
+    
+    fprintf(stderr, "int objects: %d.\n", int_count);
+    fprintf(stderr, "array objects: %d.\n", array_count);
+    fprintf(stderr, "null objects: %d.\n", null_count);
+    fprintf(stderr, "env objects: %d.\n", env_count);
+    fprintf(stderr, "total objects: %d.\n", int_count + array_count + null_count + env_count);
+
     fprintf(stderr, "lookup time: %f ms.\n", lookup_time_in_ms);
     fprintf(stderr, "total time: %f ms.\n", total_time_in_ms);
 }
