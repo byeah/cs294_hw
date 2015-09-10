@@ -48,7 +48,7 @@ NullObj* make_null_obj();
 typedef struct {
     ObjType type;
     int length;
-    int* data;
+    Obj** data;
 } ArrayObj;
 
 ArrayObj* make_array_obj(IntObj *length, Obj* init);

@@ -115,14 +115,17 @@ NullObj* make_null_obj() {
 }
 
 inline
-ArrayObj* make_array_obj(IntObj *length, Obj* init) { //Assume init is IntObj
+ArrayObj* make_array_obj(IntObj *length, Obj* init) { 
     ++ array_count;
     ArrayObj* o = malloc(sizeof(ArrayObj));
+
     o->type = Array;
     o->length = length->value;
-    o->data = malloc(sizeof(int)*o->length);
-    for (int i = 0;i < o->length;i++)
-        o->data[i] = ((IntObj*)init)->value;
+    o->data = malloc(sizeof(Obj*) * o->length);
+
+    for (int i = 0; i < o->length; i++) {
+        o->data[i] = init;
+    }
     return o;
 }
 
@@ -132,14 +135,15 @@ IntObj* array_length(ArrayObj* a) {
 }
 
 inline
-NullObj* array_set(ArrayObj* a, IntObj* i, Obj* v) { //Assume v is IntObj
-    a->data[i->value] = ((IntObj*)v)->value;
+NullObj* array_set(ArrayObj* a, IntObj* i, Obj* v) {
+    int index = i->value;
+    a->data[index] = v;
     return make_null_obj();
 }
 
 inline
 Obj* array_get(ArrayObj* a, IntObj* i) {
-    return (Obj*)make_int_obj(a->data[i->value]);
+    return a->data[i->value];
 }
 
 inline
@@ -233,10 +237,6 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
             exit(-1);
         }
         Obj* init = eval_exp(genv, env, e2->init);
-        if (init->type != Int) {
-            printf("Error: array init value is not int.\n");
-            exit(-1);
-        }
         return (Obj*)make_array_obj((IntObj*)length, init);
     }
     case OBJECT_EXP: {
