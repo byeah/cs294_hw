@@ -2,7 +2,6 @@
 #include <string.h>
 #include "hashtable.h"
 
-
 Hashtable* ht_create(int size) {
     Hashtable* hashtable = NULL;
 

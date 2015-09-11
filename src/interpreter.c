@@ -10,6 +10,7 @@
 #define inline __inline
 #endif
 
+#ifdef DEBUG
 #ifdef WIN32
 
 #include <windows.h>
@@ -30,7 +31,7 @@
 
 #endif
 
-
+#ifdef DEBUG
 static int int_calls = 0;
 static int array_calls = 0;
 static int env_calls = 0;
@@ -42,6 +43,8 @@ static int env_count = 0;
 
 static double lookup_time_in_ms = 0.0;
 static double total_time_in_ms = 0.0;
+#endif
+#endif
 
 static NullObj null_obj_singleton = { .type = Null };
 
@@ -52,7 +55,9 @@ int obj_type(Obj* o) {
 
 inline
 IntObj* make_int_obj(int value) {
+#ifdef DEBUG
     ++ int_count;
+#endif
     IntObj* o = malloc(sizeof(IntObj));
     o->type = Int;
     o->value = value;
@@ -116,7 +121,9 @@ NullObj* make_null_obj() {
 
 inline
 ArrayObj* make_array_obj(IntObj *length, Obj* init) { 
+#ifdef DEBUG
     ++ array_count;
+#endif
     ArrayObj* o = malloc(sizeof(ArrayObj));
 
     o->type = Array;
@@ -148,7 +155,9 @@ Obj* array_get(ArrayObj* a, IntObj* i) {
 
 inline
 EnvObj* make_env_obj(Obj* parent) {
+#ifdef DEBUG
     ++ env_count;
+#endif
     EnvObj* env = malloc(sizeof(EnvObj));
     env->type = Env;
     if (parent == NULL || parent->type == Null)
@@ -165,17 +174,18 @@ void add_entry(EnvObj* env, char* name, Entry* entry) {
 
 inline
 Entry* get_entry(EnvObj* env, char* name) {
+#ifdef DEBUG
     TIME_T t1, t2;
     FREQ_T freq;
 
     FREQ(freq);
     TIME(t1);
-
+#endif
     Entry* entry = (Entry*)ht_get(env->table, name);
-
+#ifdef DEBUG
     TIME(t2);
     lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
-
+#endif
     return entry;
 }
 
@@ -304,8 +314,10 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
         Obj* obj = eval_exp(genv, env, e2->exp);
 
         switch (obj->type) {
-        case Int:
+        case Int: {
+#ifdef DEBUG
             ++int_calls;
+#endif
             IntObj* iobj = (IntObj*)obj;
             Obj* para = eval_exp(genv, env, e2->args[0]);
 
@@ -338,10 +350,12 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
 
             printf("Error: Operator %s not recognized.\n", e2->name);
             exit(-1);
+        }
 
-        case Array:
+        case Array: {
+#ifdef DEBUG
             ++array_calls;
-
+#endif
             ArrayObj* aobj = (ArrayObj*)obj;
             if (strcmp(e2->name, "length") == 0)
                 return (Obj*)array_length(aobj);
@@ -354,10 +368,12 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
                 return array_get(aobj, index);
             printf("Error: Operator %s not recognized.\n", e2->name);
             exit(-1);
+        }
 
-        case Env:
+        case Env: {
+#ifdef DEBUG
             ++env_calls;
-
+#endif
             Entry* ent = get_entry((EnvObj*)obj, e2->name);
 
             if (ent == NULL) {
@@ -387,6 +403,7 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
             free(new_env);
 
             return res;
+        }
 
         default:
             printf("Error: Calling %s from a NULL reference.\n", e2->name);
@@ -593,6 +610,7 @@ Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s) {
     }
 }
 
+#ifdef DEBUG
 void print_stats() {
     fprintf(stderr, "int calls: %d.\n", int_calls);
     fprintf(stderr, "array calls: %d.\n", array_calls);
@@ -608,20 +626,25 @@ void print_stats() {
     fprintf(stderr, "lookup time: %f ms.\n", lookup_time_in_ms);
     fprintf(stderr, "total time: %f ms.\n", total_time_in_ms);
 }
+#endif
 
 void interpret(ScopeStmt* s) {
+#ifdef DEBUG
     TIME_T t1, t2;
     FREQ_T freq;
 
     FREQ(freq);
     TIME(t1);
+#endif
 
     eval_stmt(make_env_obj(NULL), NULL, s);
 
+#ifdef DEBUG
     TIME(t2);
     total_time_in_ms += ELASPED_TIME(t1, t2, freq);
 
     print_stats();
+#endif
 }
 
 
