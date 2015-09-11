@@ -5,6 +5,310 @@
 #include "ast.h"
 #include "interpreter.h"
 
+// hashtable.h
+
+struct entry_s {
+    char* key;
+    void* value;
+    struct entry_s* next;
+};
+
+typedef struct entry_s entry_t;
+
+struct hashtable_s {
+    int size;
+    struct entry_s** table;
+    struct hashtable_s* parent;
+};
+
+typedef struct hashtable_s Hashtable;
+
+Hashtable* ht_create(int size);
+
+void ht_put(Hashtable* hashtable, char* key, void* value);
+void* ht_get(Hashtable *hashtable, char *key);
+void ht_remove(Hashtable *hashtable, char *key);
+void ht_clear(Hashtable *hashtable);
+Hashtable* ht_copy(Hashtable *hashtable);
+
+
+// hashtable.c
+
+Hashtable* ht_create(int size) {
+    Hashtable* hashtable = NULL;
+
+    if (size < 1) {
+        return NULL;
+    }
+
+    if ((hashtable = malloc(sizeof(Hashtable))) == NULL) {
+        return NULL;
+    }
+
+    if ((hashtable->table = malloc(sizeof(entry_t) * size)) == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < size; ++i) {
+        hashtable->table[i] = NULL;
+    }
+
+    hashtable->size = size;
+    hashtable->parent = NULL;
+
+    return hashtable;
+}
+
+int ht_hash(Hashtable* hashtable, char* key) {
+    size_t hash, i;
+    size_t length = strlen(key);
+
+    for (hash = i = 0; i < length; ++i) {
+        hash += key[i], hash += (hash << 10), hash ^= (hash >> 6);
+    }
+    hash += (hash << 3), hash ^= (hash >> 11), hash += (hash << 15);
+
+    return hash % hashtable->size;
+}
+
+entry_t* ht_newpair(char *key, void *value) {
+    entry_t* newpair;
+    if ((newpair = malloc(sizeof(entry_t))) == NULL) {
+        return NULL;
+    }
+    // No longer duplicate key string. Use it at your own risk :)
+    /*
+    if ((newpair->key = strdup(key)) == NULL) {
+    return NULL;
+    }
+    */
+    newpair->key = key;
+    newpair->value = value;
+    newpair->next = NULL;
+    return newpair;
+}
+
+void ht_put(Hashtable* hashtable, char* key, void* value) {
+    entry_t* newpair = NULL;
+    entry_t* current = NULL;
+    entry_t* prev = NULL;
+
+    int bin = ht_hash(hashtable, key);
+    current = hashtable->table[bin];
+
+    while (current != NULL && strcmp(key, current->key) != 0) {
+        prev = current;
+        current = current->next;
+    }
+
+    /* There's already a pair.  Let's replace that string. */
+    if (current != NULL) {
+        current->value = value;
+    }
+    /* Nope, could't find it.  Time to grow a pair. */
+    else {
+        newpair = ht_newpair(key, value);
+
+        /* We're at the start of the linked list in this bin. */
+        if (prev == NULL) {
+            hashtable->table[bin] = newpair;
+        }
+        /* We're at the end of the linked list in this bin. */
+        else {
+            prev->next = newpair;
+        }
+    }
+}
+
+void* ht_get_local(Hashtable *hashtable, char *key, int bin) {
+    entry_t* current = NULL;
+    entry_t* prev = NULL;
+
+    /* Step through the bin, looking for our value. */
+    current = hashtable->table[bin];
+    while (current != NULL && strcmp(key, current->key) != 0) {
+        prev = current;
+        current = current->next;
+    }
+
+    /* Did we actually find anything? */
+    if (current == NULL) {
+        return NULL;
+    }
+    else {
+        return current->value;
+    }
+}
+
+void* ht_get(Hashtable *hashtable, char *key) {
+    int bin = ht_hash(hashtable, key);
+    Hashtable *current = hashtable;
+    while (current != NULL) {
+        void *result = ht_get_local(current, key, bin);
+        if (result != NULL)
+            return result;
+        else
+            current = current->parent;
+    }
+    return NULL;
+}
+
+void ht_remove(Hashtable *hashtable, char *key) {
+    int bin = 0;
+    entry_t* current = NULL;
+    entry_t* prev = NULL;
+
+    bin = ht_hash(hashtable, key);
+
+    /* Step through the bin, looking for our value. */
+    current = hashtable->table[bin];
+    while (current != NULL && strcmp(key, current->key) != 0) {
+        prev = current;
+        current = current->next;
+    }
+
+    /* Did we actually find anything? */
+    if (current == NULL) {
+        return;
+    }
+    else {
+        /* We're at the start of the linked list in this bin. */
+        if (prev == NULL) {
+            hashtable->table[bin] = current->next;
+        }
+        /* Otherwise */
+        else {
+            prev->next = current->next;
+        }
+        // free(current->key);
+        free(current);
+    }
+}
+
+void ht_clear(Hashtable *hashtable) {
+    for (int i = 0; i < hashtable->size; ++i) {
+        entry_t* current = hashtable->table[i];
+        while (current != NULL) {
+            entry_t* temp = current->next;
+            //free(current->key);
+            free(current);
+            current = temp;
+        }
+        hashtable->table[i] = NULL;
+    }
+}
+
+Hashtable* ht_copy(Hashtable *hashtable) {
+    Hashtable* copy = NULL;
+
+    if ((copy = ht_create(hashtable->size)) == NULL) {
+        return NULL;
+    }
+
+    copy->parent = hashtable;
+
+    return copy;
+}
+
+// interpreter.h
+
+typedef enum {
+    Int,
+    Array,
+    Null,
+    Env
+} ObjType;
+
+typedef struct {
+    ObjType type;
+} Obj;
+
+int obj_type(Obj* o);
+
+// Integer Objects
+
+typedef struct {
+    ObjType type;
+    int value;
+} IntObj;
+
+IntObj* make_int_obj(int value);
+IntObj* add(IntObj* x, IntObj *y);
+IntObj* subtract(IntObj* x, IntObj *y);
+IntObj* multiply(IntObj* x, IntObj *y);
+IntObj* divide(IntObj* x, IntObj *y);
+IntObj* modulo(IntObj* x, IntObj *y);
+Obj* eq(IntObj* x, IntObj *y);
+Obj* lt(IntObj* x, IntObj *y);
+Obj* le(IntObj* x, IntObj *y);
+Obj* gt(IntObj* x, IntObj *y);
+Obj* ge(IntObj* x, IntObj *y);
+
+// Null Objects
+
+typedef struct {
+    ObjType type;
+} NullObj;
+
+NullObj* make_null_obj();
+
+// Array Objects
+
+typedef struct {
+    ObjType type;
+    int length;
+    Obj** data;
+} ArrayObj;
+
+ArrayObj* make_array_obj(IntObj *length, Obj* init);
+IntObj* array_length(ArrayObj* a);
+NullObj* array_set(ArrayObj* a, IntObj* i, Obj* v);
+Obj* array_get(ArrayObj* a, IntObj* i);
+
+// Environment Objects
+
+typedef enum {
+    Var,
+    Func
+} EntryType;
+
+typedef struct {
+    EntryType type;
+} Entry;
+
+typedef struct {
+    EntryType type;
+    Obj* value;
+} VarEntry;
+
+typedef struct {
+    EntryType type;
+    ScopeStmt* body;
+    int nargs;
+    char** args;
+} FuncEntry;
+
+typedef struct {
+    ObjType type;
+    Hashtable* table;
+} EnvObj;
+
+EnvObj* make_env_obj(Obj* parent);
+void add_entry(EnvObj* env, char* name, Entry* entry);
+Entry* get_entry(EnvObj* env, char* name);
+
+Entry* make_var_entry(Obj* obj);
+Entry* make_func_entry(ScopeStmt*, int, char**);
+
+void exec_slotstmt(EnvObj* genv, EnvObj* env, EnvObj* obj, SlotStmt* s);
+
+void exec_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s);
+Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s);
+
+Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* exp);
+
+// interpreter.c
+
 //#define DEBUG
 #ifdef _MSC_VER
 #define inline __inline
