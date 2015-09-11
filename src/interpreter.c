@@ -5,6 +5,11 @@
 #include "ast.h"
 #include "interpreter.h"
 
+//#define DEBUG
+#ifdef _MSC_VER
+#define inline __inline
+#endif
+
 // hashtable.h
 
 struct entry_s {
@@ -59,6 +64,7 @@ Hashtable* ht_create(int size) {
     return hashtable;
 }
 
+inline
 int ht_hash(Hashtable* hashtable, char* key) {
     size_t hash, i;
     size_t length = strlen(key);
@@ -71,6 +77,7 @@ int ht_hash(Hashtable* hashtable, char* key) {
     return hash % hashtable->size;
 }
 
+inline
 entry_t* ht_newpair(char *key, void *value) {
     entry_t* newpair;
     if ((newpair = malloc(sizeof(entry_t))) == NULL) {
@@ -120,6 +127,7 @@ void ht_put(Hashtable* hashtable, char* key, void* value) {
     }
 }
 
+inline
 void* ht_get_local(Hashtable *hashtable, char *key, int bin) {
     entry_t* current = NULL;
     entry_t* prev = NULL;
@@ -308,11 +316,6 @@ Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s);
 Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* exp);
 
 // interpreter.c
-
-//#define DEBUG
-#ifdef _MSC_VER
-#define inline __inline
-#endif
 
 #ifdef DEBUG
 #ifdef WIN32
