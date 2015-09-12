@@ -607,7 +607,8 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
             printf("Error: %s should be Var in the object.\n", e2->name);
             exit(-1);
         }
-        add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env, e2->value)));
+        //add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env, e2->value)));
+        ((VarEntry*)ent)->value = eval_exp(genv, env, e2->value);
         return (Obj*)make_null_obj();
     }
     case CALL_SLOT_EXP: {
@@ -754,18 +755,24 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
 #endif
         SetExp* e2 = (SetExp*)e;
         Obj* res = eval_exp(genv, env, e2->exp);
-        if (env != NULL && get_entry(env, e2->name) != NULL) {
-            add_entry(env, e2->name, make_var_entry(res));
+        Entry* ent;
+        if (env != NULL && (ent = get_entry(env, e2->name)) != NULL) {
+            //add_entry(env, e2->name, make_var_entry(res));
         }
         else
-            if (get_entry(genv, e2->name) != NULL) {
-                add_entry(genv, e2->name, make_var_entry(res));
+            if ((ent = get_entry(genv, e2->name)) != NULL) {
+                //add_entry(genv, e2->name, make_var_entry(res));
             }
             else {
                 printf("Error: variable not found when setting its value\n");
                 exit(-1);
             }
-            return NULL;
+        if (ent->type != Var){
+            printf("Error: Setting value to a function name %s\n",e2->name);
+            exit(-1);
+        }
+        ((VarEntry*)ent)->value = res;
+        return NULL;
     }
     case IF_EXP: {
 #ifdef DEBUG 
