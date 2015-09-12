@@ -443,7 +443,7 @@ EnvObj* make_env_obj(EnvObj* parent) {
 #ifdef DEBUG
     ++ env_count;
 #endif
-    if (parent->type == Null)
+    if (parent && parent->type == Null)
         parent = NULL;
 
     if (parent && parent->type != Env) {
