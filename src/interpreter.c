@@ -23,7 +23,6 @@ typedef struct entry_s entry_t;
 struct hashtable_s {
     int size;
     struct entry_s** table;
-    struct hashtable_s* parent;
 };
 
 typedef struct hashtable_s Hashtable;
@@ -34,7 +33,6 @@ void ht_put(Hashtable* hashtable, char* key, void* value);
 void* ht_get(Hashtable *hashtable, char *key);
 void ht_remove(Hashtable *hashtable, char *key);
 void ht_clear(Hashtable *hashtable);
-Hashtable* ht_copy(Hashtable *hashtable);
 
 
 // hashtable.c
@@ -59,7 +57,6 @@ Hashtable* ht_create(int size) {
     }
 
     hashtable->size = size;
-    hashtable->parent = NULL;
 
     return hashtable;
 }
@@ -150,15 +147,7 @@ void* ht_get_local(Hashtable *hashtable, char *key, int bin) {
 
 void* ht_get(Hashtable *hashtable, char *key) {
     int bin = ht_hash(hashtable, key);
-    Hashtable *current = hashtable;
-    while (current != NULL) {
-        void *result = ht_get_local(current, key, bin);
-        if (result != NULL)
-            return result;
-        else
-            current = current->parent;
-    }
-    return NULL;
+    return ht_get_local(hashtable, key, bin);
 }
 
 void ht_remove(Hashtable *hashtable, char *key) {
@@ -204,18 +193,6 @@ void ht_clear(Hashtable *hashtable) {
         }
         hashtable->table[i] = NULL;
     }
-}
-
-Hashtable* ht_copy(Hashtable *hashtable) {
-    Hashtable* copy = NULL;
-
-    if ((copy = ht_create(hashtable->size)) == NULL) {
-        return NULL;
-    }
-
-    copy->parent = hashtable;
-
-    return copy;
 }
 
 // interpreter.h
@@ -296,12 +273,13 @@ typedef struct {
     char** args;
 } FuncEntry;
 
-typedef struct {
+typedef struct env_obj_s {
     ObjType type;
     Hashtable* table;
+    struct env_obj_s* parent;
 } EnvObj;
 
-EnvObj* make_env_obj(Obj* parent);
+EnvObj* make_env_obj(EnvObj* parent);
 void add_entry(EnvObj* env, char* name, Entry* entry);
 Entry* get_entry(EnvObj* env, char* name);
 
@@ -461,22 +439,42 @@ Obj* array_get(ArrayObj* a, IntObj* i) {
 }
 
 inline
-EnvObj* make_env_obj(Obj* parent) {
+EnvObj* make_env_obj(EnvObj* parent) {
 #ifdef DEBUG
     ++ env_count;
 #endif
+    if (parent->type == Null)
+        parent = NULL;
+
+    if (parent && parent->type != Env) {
+        printf("Error: Parent can only be Env or Null objects.\n");
+        exit(-1);
+    }
+
     EnvObj* env = malloc(sizeof(EnvObj));
     env->type = Env;
-    if (parent == NULL || parent->type == Null)
-        env->table = ht_create(11);
-    else
-        env->table = ht_copy(((EnvObj*)parent)->table);
+    env->table = ht_create(11);
+    env->parent = parent;
     return env;
 }
 
 inline
 void add_entry(EnvObj* env, char* name, Entry* entry) {
-    ht_put(env->table, name, entry);
+    EnvObj* current_env = env;
+    EnvObj* target_env = env;
+
+    while (current_env != NULL) {
+        Entry* entry = (Entry*)ht_get(current_env->table, name);
+        if (entry != NULL) {
+            target_env = current_env;
+            break;
+        }
+        else {
+            current_env = current_env->parent;
+        }
+    }
+
+    ht_put(target_env->table, name, entry);
 }
 
 inline
@@ -488,12 +486,27 @@ Entry* get_entry(EnvObj* env, char* name) {
     FREQ(freq);
     TIME(t1);
 #endif
-    Entry* entry = (Entry*)ht_get(env->table, name);
+    EnvObj* current_env = env;
+    while (current_env != NULL) {
+        Entry* entry = (Entry*) ht_get (current_env->table, name);
+        if (entry != NULL) {
+#ifdef DEBUG
+            TIME(t2);
+            lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
+#endif
+            return entry;
+        }
+        else {
+            current_env = current_env->parent;
+        }
+    }
+
 #ifdef DEBUG
     TIME(t2);
     lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
 #endif
-    return entry;
+
+    return NULL;
 }
 
 inline
@@ -561,7 +574,7 @@ Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* e) {
         printf("debug: OBJECT\n");
 #endif
         ObjectExp* e2 = (ObjectExp*)e;
-        EnvObj* obj = make_env_obj(eval_exp(genv, env, e2->parent));
+        EnvObj* obj = make_env_obj((EnvObj *)eval_exp(genv, env, e2->parent));
         for (int i = 0; i < e2->nslots; i++) {
             exec_slotstmt(genv, env, obj, e2->slots[i]);
         }
