@@ -1,0 +1,61 @@
+defn stack (n) :
+  object :
+    var d = array(n,0)
+    var size = 0
+
+    method push (x) :
+      this.d[this.size] = x
+      this.size = this.size + 1
+
+    method peek ():
+      this.d[this.size - 1]
+
+    method pop ():
+      this.size = this.size - 1
+      this.d[this.size]
+
+defn printChar (i) :
+  if i == 0 :
+    printf("A")
+  if i == 1 :
+    printf("B")
+  if i == 2 :
+    printf("C")
+  
+defn push (s_ t_ n_ ip_):
+  s.push(s_)
+  t.push(t_)
+  n.push(n_)
+  ip.push(ip_)
+
+defn pop ():
+  s.pop()
+  t.pop()
+  n.pop()
+  ip.pop()
+
+var s = stack(10)
+var t = stack(10)
+var n = stack(10)
+var ip = stack(10)
+push(0,2,6,0)
+while s.size>0 :
+  var ss = s.peek()
+  var tt = t.peek()
+  var nn = n.peek()
+  if nn == 0:
+    pop()
+  else :
+    if ip.peek() == 0 :
+      ip.pop()
+      ip.push(1)
+      push(ss,3 - ss - tt,nn - 1,0)
+    else :
+      printf("Move plate ~ from ", nn)
+      printChar(ss)
+      printf(" stack to ")
+      printChar(tt)
+      printf(" stack\n")
+      pop()
+      push(3 - ss - tt, tt, nn - 1, 0)
+
