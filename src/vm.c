@@ -204,24 +204,48 @@ struct frame_t {
 };
 typedef struct frame_t Frame;
 
+Frame* make_frame(Frame* parent, ByteIns* return_addr, int num_slots) {
+    Frame* frame = (Frame *)malloc(sizeof(Frame));
+    
+    frame->slots = make_vector();
+    vector_set_length(frame->slots, num_slots, NULL);
+    frame->return_addr = return_addr;
+    frame->parent = parent;
+    
+    return frame;
+}
+
+void free_frame(Frame* frame) {
+    vector_free(frame->slots);
+    free(frame);
+}
+
 static Hashtable* global_vars = NULL;
-static ByteIns* pc = NULL;
+static Vector* code = NULL;
+static int pc = 0;
 static Vector* operand = NULL;
 static Frame* local_frame = NULL;
 
 void vm_init(Program* p) {
     global_vars = ht_create(13);
     operand = make_vector();
+
+    // init entry
+    MethodValue* entry_func = vector_get(p->values, p->entry);
+    local_frame = make_frame(NULL, NULL, entry_func->nargs + entry_func->nlocals);
+    code = entry_func->code;
+    pc = 0;
 }
+
+
 
 void interpret_bc(Program* p) {
     vm_init(p);
     //printf("Interpreting Bytecode Program:\n");
     //print_prog(p);
-    while (1) {
-        if (pc == NULL)
-            break;
-        switch (pc->tag)
+    while (pc < code->size) {
+        ByteIns* ins = vector_get(code, pc);
+        switch (ins->tag)
         {
         default:
             break;
