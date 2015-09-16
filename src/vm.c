@@ -32,7 +32,7 @@ Hashtable* ht_create(int size);
 void ht_put(Hashtable* hashtable, char* key, void* value);
 void* ht_get(Hashtable *hashtable, char *key);
 void ht_remove(Hashtable *hashtable, char *key);
-void ht_clear(Hashtable *hashtable);
+void ht_free(Hashtable *hashtable, void(*free_val) (void *));
 
 
 // hashtable.c
@@ -182,17 +182,19 @@ void ht_remove(Hashtable *hashtable, char *key) {
     }
 }
 
-void ht_clear(Hashtable *hashtable) {
+void ht_free(Hashtable *hashtable, void (*free_val) (void *)) {
     for (int i = 0; i < hashtable->size; ++i) {
         entry_t* current = hashtable->table[i];
         while (current != NULL) {
             entry_t* temp = current->next;
-            //free(current->key);
+            if (free_val != NULL)
+                free_val(current->value);
             free(current);
             current = temp;
         }
         hashtable->table[i] = NULL;
     }
+    free(hashtable);
 }
 
 typedef enum {
@@ -330,12 +332,11 @@ Obj* array_get(ArrayObj* a, IntObj* i) {
 
 // vm.c
 
-struct frame_t {
+typedef struct frame_t {
     Vector* slots; // Vector of Obj*
     ByteIns* return_addr;
     struct frame_t* parent;
-};
-typedef struct frame_t Frame;
+} Frame;
 
 Frame* make_frame(Frame* parent, ByteIns* return_addr, int num_slots) {
     Frame* frame = (Frame *)malloc(sizeof(Frame));
@@ -353,11 +354,36 @@ void free_frame(Frame* frame) {
     free(frame);
 }
 
+typedef struct {
+    Vector* code;
+    int pc;
+} LabelAddr;
+
+LabelAddr* make_label(Vector* code, int pc) {
+    LabelAddr* label = (LabelAddr *)malloc(sizeof(LabelAddr));
+    label->code = code;
+    label->pc = pc;
+    return label;
+}
+
+void free_label(LabelAddr* label) {
+    free(label);
+}
+
 static Hashtable* global_vars = NULL;
+static Hashtable* labels = NULL;
 static Vector* code = NULL;
 static int pc = 0;
 static Vector* operand = NULL;
 static Frame* local_frame = NULL;
+
+static inline
+void assert(int criteria, char *msg) {
+    if (!criteria) {
+        fprintf(stderr, msg);
+        exit(1);
+    }
+}
 
 static inline
 void vm_init(Program* p) {
@@ -369,6 +395,41 @@ void vm_init(Program* p) {
     local_frame = make_frame(NULL, NULL, entry_func->nargs + entry_func->nlocals);
     code = entry_func->code;
     pc = 0;
+
+    // preprocess labels
+    labels = ht_create(13);
+
+    for (int i = 0; i < p->values->size; ++i) {
+        Value* val = vector_get(p->values, i);
+        if (val->tag != METHOD_VAL)
+            continue;
+        MethodValue* method = (MethodValue *)val;
+        for (int j = 0; j < method->code->size; ++j) {
+            ByteIns* ins = vector_get(method->code, j);
+            if (ins->tag != LABEL_OP)
+                continue;
+            LabelIns* label_ins = (LabelIns *)ins;
+            StringValue *label_string = vector_get(p->values, label_ins->name);
+            assert(label_string->tag == STRING_VAL, "Invalid object type for LABEL.\n");
+
+            ht_put(labels, label_string->value, make_label(method->code, j));
+        }
+    }
+}
+
+static inline
+void vm_cleanup() {
+    ht_free(global_vars, NULL);
+    ht_free(labels, free);
+    code = NULL;
+    pc = 0;
+    vector_free(operand);
+
+    while (local_frame != NULL) {
+        Frame* t = local_frame->parent;
+        free_frame(local_frame);
+        local_frame = t;
+    }
 }
 
 static inline 
@@ -384,14 +445,6 @@ void* pop() {
 static inline
 void* peek() {
     return vector_peek(operand);
-}
-
-static inline
-void assert(int criteria, char *msg) {
-    if (!criteria) {
-        fprintf(stderr, msg);
-        exit(1);
-    }
 }
 
 void interpret_bc(Program* p) {
@@ -474,7 +527,7 @@ void interpret_bc(Program* p) {
             break;
         }
         default: {
-            assert(0, "Invalid instruction.");
+            assert(0, "Invalid instruction.\n");
             break;
         }
         }
