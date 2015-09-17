@@ -201,7 +201,9 @@ typedef enum {
     Int,
     Array,
     Null,
-    Env
+    Env,
+    Method,
+    Slot
 } ObjType;
 
 typedef struct {
@@ -223,9 +225,35 @@ typedef struct {
     Obj** data;
 } ArrayObj;
 
+typedef struct {
+    ObjType type;
+    MethodValue* method;
+} MethodObj;
+
+typedef struct {
+    ObjType type;
+    SlotValue* slot;
+} SlotObj;
+
 inline
 int obj_type(Obj* o) {
     return o->type;
+}
+
+inline 
+MethodObj* make_method_obj(MethodValue* method) {
+    MethodObj* o = malloc(sizeof(MethodObj));
+    o->type = Method;
+    o->method = method;
+    return o;
+}
+
+inline
+SlotObj* make_slot_obj(SlotValue* slot) {
+    SlotObj* o = malloc(sizeof(SlotObj));
+    o->type = Slot;
+    o->slot = slot;
+    return o;
 }
 
 static NullObj null_obj_singleton = { .type = Null };
@@ -332,28 +360,6 @@ Obj* array_get(ArrayObj* a, IntObj* i) {
 
 // vm.c
 
-typedef struct frame_t {
-    Vector* slots; // Vector of Obj*
-    ByteIns* return_addr;
-    struct frame_t* parent;
-} Frame;
-
-Frame* make_frame(Frame* parent, ByteIns* return_addr, int num_slots) {
-    Frame* frame = (Frame *)malloc(sizeof(Frame));
-    
-    frame->slots = make_vector();
-    vector_set_length(frame->slots, num_slots, NULL);
-    frame->return_addr = return_addr;
-    frame->parent = parent;
-    
-    return frame;
-}
-
-void free_frame(Frame* frame) {
-    vector_free(frame->slots);
-    free(frame);
-}
-
 typedef struct {
     Vector* code;
     int pc;
@@ -368,6 +374,31 @@ LabelAddr* make_label(Vector* code, int pc) {
 
 void free_label(LabelAddr* label) {
     free(label);
+}
+
+typedef struct frame_t {
+    Vector* slots; // Vector of Obj*
+    LabelAddr return_addr;
+    struct frame_t* parent;
+} Frame;
+
+Frame* make_frame(Frame* parent, Vector* code, int pc, int num_slots) {
+    Frame* frame = (Frame *)malloc(sizeof(Frame));
+    
+    frame->slots = make_vector();
+    vector_set_length(frame->slots, num_slots, NULL);
+
+    frame->return_addr.code = code;
+    frame->return_addr.pc = pc;
+
+    frame->parent = parent;
+    
+    return frame;
+}
+
+void free_frame(Frame* frame) {
+    vector_free(frame->slots);
+    free(frame);
 }
 
 static Hashtable* global_vars = NULL;
@@ -392,9 +423,35 @@ void vm_init(Program* p) {
 
     // init entry
     MethodValue* entry_func = vector_get(p->values, p->entry);
-    local_frame = make_frame(NULL, NULL, entry_func->nargs + entry_func->nlocals);
+    local_frame = make_frame(NULL, NULL, 0, entry_func->nargs + entry_func->nlocals);
     code = entry_func->code;
     pc = 0;
+
+    // init global
+    for (int i = 0; i < p->slots->size; ++i) {
+        int index = (int)vector_get(p->slots, i);
+        Value* value = vector_get(p->values, index);
+        switch (value->tag) {
+        case METHOD_VAL: {
+            MethodValue* method_val = (MethodValue *)value;
+            StringValue *name = vector_get(p->values, method_val->name);
+            assert(name->tag == STRING_VAL, "Invalid object type.\n");
+            MethodObj* method_obj = make_method_obj(method_val);
+            ht_put(global_vars, name->value, method_obj);
+            break;
+        }
+        case SLOT_VAL: {
+            SlotValue* slot_val = (SlotValue *)value;
+            StringValue *name = vector_get(p->values, slot_val->name);
+            assert(name->tag == STRING_VAL, "Invalid object type.\n");
+            SlotObj* slot_obj = make_slot_obj(slot_val);
+            ht_put(global_vars, name->value, slot_obj);
+            break;
+        }
+        default:
+            assert(0, "Invalid value type.\n");
+        }
+    }
 
     // preprocess labels
     labels = ht_create(13);
@@ -480,7 +537,7 @@ void interpret_bc(Program* p) {
         }
         case PRINTF_OP: {
             PrintfIns* printf_ins = (PrintfIns *)ins;
-            int* res = malloc(sizeof(int) * (printf_ins->arity + 1));
+            int* res = malloc(sizeof(int) * (printf_ins->arity));
             for (int i = 0; i < printf_ins->arity; i++) {
                 IntObj* obj = pop();
                 assert(obj->type == Int, "Invalid object type for PRINTF.\n");
@@ -524,6 +581,67 @@ void interpret_bc(Program* p) {
         }
         case DROP_OP: {
             pop();
+            break;
+        }
+        case LABEL_OP: {
+            // Already processed
+            break;
+        }
+        case BRANCH_OP: {
+            Obj* predicate = pop();
+            if (predicate->type != Null) {
+                BranchIns* branch_ins = (BranchIns *)ins;
+                StringValue *name = vector_get(p->values, branch_ins->name);
+                assert(name->tag == STRING_VAL, "Invalid object type for BRANCH_OP.\n");
+                LabelAddr* label = ht_get(labels, name->value);
+                assert(label != NULL, "Label not found in BRANCH_OP.\n");
+                assert(label->code == code, "Cross method jump is not allowed for BRANCH_OP.\n");
+                pc = label->pc;
+            }
+            break;
+        }
+        case GOTO_OP: {
+            GotoIns* goto_ins = (GotoIns *)ins;
+            StringValue *name = vector_get(p->values, goto_ins->name);
+            assert(name->tag == STRING_VAL, "Invalid object type for GOTO_OP.\n");
+            LabelAddr* label = ht_get(labels, name->value);
+            assert(label != NULL, "Label not found in GOTO_OP.\n");
+            assert(label->code == code, "Cross method jump is not allowed for GOTO_OP.\n");
+            pc = label->pc;
+            break;
+        }
+        case CALL_OP: {
+            CallIns* call_ins = (CallIns *)ins;
+            
+            Obj** args = malloc(sizeof(Obj *) * (call_ins->arity));
+            for (int i = 0; i < call_ins->arity; i++) {
+                args[i] = pop();
+            }
+            
+            StringValue *name = vector_get(p->values, call_ins->name);
+            assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
+
+            MethodObj *method_obj = ht_get(global_vars, name->value);
+            assert(method_obj && obj_type(method_obj) == Method, "Invalid method type for CALL_OP.\n");
+
+            Frame* new_frame = make_frame(local_frame, code, pc, 
+                method_obj->method->nargs + method_obj->method->nlocals);
+
+            for (int i = 0; i < call_ins->arity; i++) {
+                vector_set(new_frame->slots, i, args[call_ins->arity - 1 - i]);
+            }
+
+            local_frame = new_frame;
+            code = method_obj->method->code;
+            pc = -1;
+            break;
+        }
+        case RETURN_OP: {
+            Frame *t = local_frame;
+            local_frame = t->parent;
+            free_frame(t);
+            code = local_frame->return_addr.code;
+            pc = local_frame->return_addr.pc;
             break;
         }
         default: {
