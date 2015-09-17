@@ -10,7 +10,10 @@
 #define inline __inline
 #endif
 
+int debug = 0;
+
 // hashtable.h
+
 
 struct entry_s {
     char* key;
@@ -408,7 +411,6 @@ static int pc = 0;
 static Vector* operand = NULL;
 static Frame* local_frame = NULL;
 
-int debug = 1;
 
 static inline
 void assert(int criteria, char *msg) {
@@ -515,148 +517,238 @@ void interpret_bc(Program* p) {
         if (debug) printf("PC: %d\n",pc);
         switch (ins->tag)
         {
-        case LIT_OP: {
-            LitIns* lit_ins = (LitIns *)ins;
-            int index = lit_ins->idx;
-            Value* val = vector_get(p->values, index);
-            if (val->tag == INT_VAL) {
-                push((Obj*)make_int_obj(((IntValue *)val)->value));
+            case LIT_OP: {
+                LitIns* lit_ins = (LitIns *)ins;
+                int index = lit_ins->idx;
+                Value* val = vector_get(p->values, index);
+                if (val->tag == INT_VAL) {
+                    push((Obj*)make_int_obj(((IntValue *)val)->value));
+                }
+                else if (val->tag == NULL_VAL) {
+                    push((Obj*)make_null_obj());
+                }
+                else {
+                    assert(0, "Invalid object type for LIT.\n");
+                }
+                break;
             }
-            else if (val->tag == NULL_VAL) {
+            case ARRAY_OP: {
+                Obj* init_val = pop();
+                IntObj* length = pop();
+                assert(length->type == Int, "Invalid length type for ARRAY.\n");
+                ArrayObj* obj = make_array_obj(length, init_val);
+                push((Obj*)obj);
+                break;
+            }
+            case PRINTF_OP: {
+                if (debug) printf("!!PRINT\n");
+                PrintfIns* printf_ins = (PrintfIns *)ins;
+                int* res = malloc(sizeof(int) * (printf_ins->arity));
+                for (int i = 0; i < printf_ins->arity; i++) {
+                    IntObj* obj = pop();
+                    assert(obj->type == Int, "Invalid object type for PRINTF.\n");
+                    res[i] = obj->value;
+                }
+                int cur = printf_ins->arity;
+                StringValue *format = vector_get(p->values, printf_ins->format);
+                assert(format->tag == STRING_VAL, "Invalid object type for PRINTF_OP.\n");
+                for (char* p = format->value; *p && cur >= 0; p++) {
+                    if (*p != '~')
+                        printf("%c", *p);
+                    else
+                        printf("%d", res[--cur]);
+                }
                 push((Obj*)make_null_obj());
+                break;
             }
-            else {
-                assert(0, "Invalid object type for LIT.\n");
+            case OBJECT_OP: {
+                ObjectIns* i = (ObjectIns*)ins;
+                printf("   object #%d", i->class);
+                break;
             }
-            break;
-        }
-        case ARRAY_OP: {
-            Obj* init_val = pop();
-            IntObj* length = pop();
-            assert(length->type == Int, "Invalid length type for ARRAY.\n");
-            ArrayObj* obj = make_array_obj(length, init_val);
-            push((Obj*)obj);
-            break;
-        }
-        case PRINTF_OP: {
-            if (debug) printf("!!PRINT\n");
-            PrintfIns* printf_ins = (PrintfIns *)ins;
-            int* res = malloc(sizeof(int) * (printf_ins->arity));
-            for (int i = 0; i < printf_ins->arity; i++) {
-                IntObj* obj = pop();
-                assert(obj->type == Int, "Invalid object type for PRINTF.\n");
-                res[i] = obj->value;
+            case SLOT_OP: {
+                SlotIns* i = (SlotIns*)ins;
+                //printf("   slot #%d", i->name);
+                break;
             }
-            int cur = printf_ins->arity;
-            StringValue *format = vector_get(p->values, printf_ins->format);
-            assert(format->tag == STRING_VAL, "Invalid object type for PRINTF_OP.\n");
-            for (char* p = format->value; *p && cur >= 0; p++) {
-                if (*p != '~')
-                    printf("%c", *p);
-                else
-                    printf("%d", res[--cur]);
+            case SET_SLOT_OP: {
+                SetSlotIns* i = (SetSlotIns*)ins;
+                //printf("   set-slot #%d", i->name);
+                break;
             }
-            push((Obj*)make_null_obj());
-            break;
-        }
-        case SET_LOCAL_OP: {
-            SetLocalIns *set_local_ins = (SetLocalIns *)ins;
-            vector_set(local_frame->slots, set_local_ins->idx, peek());
-            break;
-        }
-        case GET_LOCAL_OP: {
-            GetLocalIns *get_local_ins = (GetLocalIns *)ins;
-            push(vector_get(local_frame->slots, get_local_ins->idx));
-            break;
-        }
-        case SET_GLOBAL_OP: {
-            SetGlobalIns *set_global_ins = (SetGlobalIns *)ins;
-            StringValue *name = vector_get(p->values, set_global_ins->name);
-            assert(name->tag == STRING_VAL, "Invalid object type for SET_GLOBAL_OP.\n");
-            ht_put(global_vars, name->value, peek());
-            break;
-        }
-        case GET_GLOBAL_OP: {
-            GetGlobalIns *get_global_ins = (GetGlobalIns *)ins;
-            StringValue *name = vector_get(p->values, get_global_ins->name);
-            assert(name->tag == STRING_VAL, "Invalid object type for GET_GLOBAL_OP.\n");
-            push(ht_get(global_vars, name->value));
-            break;
-        }
-        case DROP_OP: {
-            pop();
-            break;
-        }
-        case LABEL_OP: {
-            // Already processed
-            break;
-        }
-        case BRANCH_OP: {
-            Obj* predicate = pop();
-            if (predicate->type != Null) {
-                BranchIns* branch_ins = (BranchIns *)ins;
-                StringValue *name = vector_get(p->values, branch_ins->name);
-                assert(name->tag == STRING_VAL, "Invalid object type for BRANCH_OP.\n");
+            case CALL_SLOT_OP: {
+                CallSlotIns* call_slot = (CallSlotIns*)ins;
+                if (debug) printf("   call-slot #%d %d\n", call_slot->name, call_slot->arity);
+                Obj** args = malloc(sizeof(Obj *) * (call_slot->arity));
+                for (int i = 0; i < call_slot->arity; i++) {
+                    args[i] = pop();
+                }
+                Obj* receiver = args[call_slot->arity-1];
+                StringValue *name = vector_get(p->values, call_slot->name);
+                assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
+                //printf("%d\n",receiver->type);
+                switch (receiver->type) {
+                    case Int: {
+                        IntObj* iobj = (IntObj*)receiver;
+                        assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
+                        Obj* para = args[0];
+                        if (para->type != Int) {
+                            printf("Error: Operand %s to Int must be Int.\n", name->value);
+                            exit(-1);
+                        }
+                        IntObj* ipara = (IntObj*)para;
+                        
+                        if (strcmp(name->value, "add") == 0)
+                            push((Obj*)add(iobj, ipara)); else
+                        if (strcmp(name->value, "sub") == 0)
+                            push((Obj*)subtract(iobj, ipara)); else
+                        if (strcmp(name->value, "mul") == 0)
+                            push((Obj*)multiply(iobj, ipara)); else
+                        if (strcmp(name->value, "div") == 0)
+                            push((Obj*)divide(iobj, ipara)); else
+                        if (strcmp(name->value, "mod") == 0)
+                            push((Obj*)modulo(iobj, ipara)); else
+                        if (strcmp(name->value, "lt") == 0)
+                            push((Obj*)lt(iobj, ipara)); else
+                        if (strcmp(name->value, "gt") == 0)
+                            push((Obj*)gt(iobj, ipara)); else
+                        if (strcmp(name->value, "le") == 0)
+                            push((Obj*)le(iobj, ipara)); else
+                        if (strcmp(name->value, "ge") == 0)
+                            push((Obj*)ge(iobj, ipara)); else
+                        if (strcmp(name->value, "eq") == 0)
+                            push((Obj*)eq(iobj, ipara));
+                        else
+                            printf("Error: Operator %s not recognized.\n", name->value);
+                        break;
+                    }
+                        
+                    case Array: {
+                        ArrayObj* aobj = (ArrayObj*)receiver;
+                        if (strcmp(name->value, "length") == 0)
+                            push((Obj*)array_length(aobj)); else
+                        if (strcmp(name->value, "set") == 0) {
+                            IntObj* index = (IntObj*)args[1];
+                            array_set(aobj, index, args[0]);
+                            push((Obj*)make_null_obj());
+                        }else
+                            if (strcmp(name->value, "get") == 0)
+                                push(array_get(aobj, (IntObj*)args[0]));
+                            else
+                            {
+                                printf("Error: Operator %s not recognized.\n", name->value);
+                                exit(-1);
+                            }
+                        break;
+                    }
+                        
+                    case Env: {
+                        break;
+                    }
+                    default:
+                        printf("Error: Calling %s from a NULL reference.\n", name->value);
+                        exit(-1);
+                }
+                break;
+            }
+            case SET_LOCAL_OP: {
+                SetLocalIns *set_local_ins = (SetLocalIns *)ins;
+                vector_set(local_frame->slots, set_local_ins->idx, peek());
+                break;
+            }
+            case GET_LOCAL_OP: {
+                GetLocalIns *get_local_ins = (GetLocalIns *)ins;
+                push(vector_get(local_frame->slots, get_local_ins->idx));
+                break;
+            }
+            case SET_GLOBAL_OP: {
+                SetGlobalIns *set_global_ins = (SetGlobalIns *)ins;
+                StringValue *name = vector_get(p->values, set_global_ins->name);
+                assert(name->tag == STRING_VAL, "Invalid object type for SET_GLOBAL_OP.\n");
+                ht_put(global_vars, name->value, peek());
+                break;
+            }
+            case GET_GLOBAL_OP: {
+                GetGlobalIns *get_global_ins = (GetGlobalIns *)ins;
+                StringValue *name = vector_get(p->values, get_global_ins->name);
+                assert(name->tag == STRING_VAL, "Invalid object type for GET_GLOBAL_OP.\n");
+                push(ht_get(global_vars, name->value));
+                break;
+            }
+            case DROP_OP: {
+                pop();
+                break;
+            }
+            case LABEL_OP: {
+                // Already processed
+                break;
+            }
+            case BRANCH_OP: {
+                Obj* predicate = pop();
+                if (predicate->type != Null) {
+                    BranchIns* branch_ins = (BranchIns *)ins;
+                    StringValue *name = vector_get(p->values, branch_ins->name);
+                    assert(name->tag == STRING_VAL, "Invalid object type for BRANCH_OP.\n");
+                    LabelAddr* label = ht_get(labels, name->value);
+                    assert(label != NULL, "Label not found in BRANCH_OP.\n");
+                    assert(label->code == code, "Cross method jump is not allowed for BRANCH_OP.\n");
+                    pc = label->pc;
+                }
+                break;
+            }
+            case GOTO_OP: {
+                GotoIns* goto_ins = (GotoIns *)ins;
+                StringValue *name = vector_get(p->values, goto_ins->name);
+                assert(name->tag == STRING_VAL, "Invalid object type for GOTO_OP.\n");
                 LabelAddr* label = ht_get(labels, name->value);
-                assert(label != NULL, "Label not found in BRANCH_OP.\n");
-                assert(label->code == code, "Cross method jump is not allowed for BRANCH_OP.\n");
+                assert(label != NULL, "Label not found in GOTO_OP.\n");
+                assert(label->code == code, "Cross method jump is not allowed for GOTO_OP.\n");
                 pc = label->pc;
+                break;
             }
-            break;
-        }
-        case GOTO_OP: {
-            GotoIns* goto_ins = (GotoIns *)ins;
-            StringValue *name = vector_get(p->values, goto_ins->name);
-            assert(name->tag == STRING_VAL, "Invalid object type for GOTO_OP.\n");
-            LabelAddr* label = ht_get(labels, name->value);
-            assert(label != NULL, "Label not found in GOTO_OP.\n");
-            assert(label->code == code, "Cross method jump is not allowed for GOTO_OP.\n");
-            pc = label->pc;
-            break;
-        }
-        case CALL_OP: {
-            CallIns* call_ins = (CallIns *)ins;
-            
-            Obj** args = malloc(sizeof(Obj *) * (call_ins->arity));
-            for (int i = 0; i < call_ins->arity; i++) {
-                args[i] = pop();
+            case CALL_OP: {
+                CallIns* call_ins = (CallIns *)ins;
+                
+                Obj** args = malloc(sizeof(Obj *) * (call_ins->arity));
+                for (int i = 0; i < call_ins->arity; i++) {
+                    args[i] = pop();
+                }
+                
+                StringValue *name = vector_get(p->values, call_ins->name);
+                assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
+                
+                MethodObj *method_obj = ht_get(global_vars, name->value);
+                assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
+                
+                Frame* new_frame = make_frame(local_frame, code, pc,
+                                              method_obj->method->nargs + method_obj->method->nlocals);
+                
+                for (int i = 0; i < call_ins->arity; i++) {
+                    vector_set(new_frame->slots, i, args[call_ins->arity - 1 - i]);
+                }
+                
+                local_frame = new_frame;
+                code = method_obj->method->code;
+                pc = -1;
+                break;
             }
-            
-            StringValue *name = vector_get(p->values, call_ins->name);
-            assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
-
-            MethodObj *method_obj = ht_get(global_vars, name->value);
-            assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
-
-            Frame* new_frame = make_frame(local_frame, code, pc, 
-                method_obj->method->nargs + method_obj->method->nlocals);
-
-            for (int i = 0; i < call_ins->arity; i++) {
-                vector_set(new_frame->slots, i, args[call_ins->arity - 1 - i]);
+            case RETURN_OP: {
+                if (debug) printf("!!Return\n");
+                Frame *t = local_frame;
+                local_frame = t->parent;
+                code = t->return_addr.code;
+                pc = t->return_addr.pc;
+                free_frame(t);
+                
+                if (local_frame == NULL)
+                    return;
+                
+                break;
             }
-
-            local_frame = new_frame;
-            code = method_obj->method->code;
-            pc = -1;
-            break;
-        }
-        case RETURN_OP: {
-            if (debug) printf("!!Return\n");
-            Frame *t = local_frame;
-            local_frame = t->parent;
-            code = t->return_addr.code;
-            pc = t->return_addr.pc;
-            free_frame(t);
-
-            if (local_frame == NULL)
-                return;
-
-            break;
-        }
-        default: {
-            assert(0, "Invalid instruction.\n");
-            break;
-        }
+            default: {
+                assert(0, "Invalid instruction.\n");
+                break;
+            }
         }
         ++pc;
     }
