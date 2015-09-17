@@ -408,6 +408,8 @@ static int pc = 0;
 static Vector* operand = NULL;
 static Frame* local_frame = NULL;
 
+int debug = 1;
+
 static inline
 void assert(int criteria, char *msg) {
     if (!criteria) {
@@ -510,6 +512,7 @@ void interpret_bc(Program* p) {
     //print_prog(p);
     while (pc < code->size) {
         ByteIns* ins = vector_get(code, pc);
+        if (debug) printf("PC: %d\n",pc);
         switch (ins->tag)
         {
         case LIT_OP: {
@@ -517,10 +520,10 @@ void interpret_bc(Program* p) {
             int index = lit_ins->idx;
             Value* val = vector_get(p->values, index);
             if (val->tag == INT_VAL) {
-                push(make_int_obj(((IntValue *)val)->value));
+                push((Obj*)make_int_obj(((IntValue *)val)->value));
             }
             else if (val->tag == NULL_VAL) {
-                push(make_null_obj());
+                push((Obj*)make_null_obj());
             }
             else {
                 assert(0, "Invalid object type for LIT.\n");
@@ -532,10 +535,11 @@ void interpret_bc(Program* p) {
             IntObj* length = pop();
             assert(length->type == Int, "Invalid length type for ARRAY.\n");
             ArrayObj* obj = make_array_obj(length, init_val);
-            push(obj);
+            push((Obj*)obj);
             break;
         }
         case PRINTF_OP: {
+            if (debug) printf("!!PRINT\n");
             PrintfIns* printf_ins = (PrintfIns *)ins;
             int* res = malloc(sizeof(int) * (printf_ins->arity));
             for (int i = 0; i < printf_ins->arity; i++) {
@@ -546,13 +550,13 @@ void interpret_bc(Program* p) {
             int cur = printf_ins->arity;
             StringValue *format = vector_get(p->values, printf_ins->format);
             assert(format->tag == STRING_VAL, "Invalid object type for PRINTF_OP.\n");
-            for (char* p = format->value; *p && cur > 0; p++) {
+            for (char* p = format->value; *p && cur >= 0; p++) {
                 if (*p != '~')
                     printf("%c", *p);
                 else
                     printf("%d", res[--cur]);
             }
-            push(make_null_obj());
+            push((Obj*)make_null_obj());
             break;
         }
         case SET_LOCAL_OP: {
@@ -622,7 +626,7 @@ void interpret_bc(Program* p) {
             assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
 
             MethodObj *method_obj = ht_get(global_vars, name->value);
-            assert(method_obj && obj_type(method_obj) == Method, "Invalid method type for CALL_OP.\n");
+            assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
 
             Frame* new_frame = make_frame(local_frame, code, pc, 
                 method_obj->method->nargs + method_obj->method->nlocals);
@@ -637,16 +641,16 @@ void interpret_bc(Program* p) {
             break;
         }
         case RETURN_OP: {
+            if (debug) printf("!!Return\n");
             Frame *t = local_frame;
             local_frame = t->parent;
+            code = t->return_addr.code;
+            pc = t->return_addr.pc;
             free_frame(t);
 
             if (local_frame == NULL)
                 return;
 
-            code = local_frame->return_addr.code;
-            pc = local_frame->return_addr.pc;
-            
             break;
         }
         default: {
