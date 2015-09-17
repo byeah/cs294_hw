@@ -640,8 +640,13 @@ void interpret_bc(Program* p) {
             Frame *t = local_frame;
             local_frame = t->parent;
             free_frame(t);
+
+            if (local_frame == NULL)
+                return;
+
             code = local_frame->return_addr.code;
             pc = local_frame->return_addr.pc;
+            
             break;
         }
         default: {
