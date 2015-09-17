@@ -232,12 +232,6 @@ typedef struct {
     MethodValue* method;
 } MethodObj;
 
-typedef struct {
-    ObjType type;
-    //    SlotValue* slot;
-    Obj* slotValue;
-} SlotObj;
-
 typedef struct env_obj_s {
     ObjType type;
     Hashtable* table;
