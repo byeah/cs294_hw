@@ -6,6 +6,7 @@
 #include "bytecode.h"
 #include "vm.h"
 
+#define DEBUG
 #ifdef _MSC_VER
 #define inline __inline
 #endif
@@ -36,6 +37,43 @@ void ht_put(Hashtable* hashtable, char* key, void* value);
 void* ht_get(Hashtable *hashtable, char *key);
 void ht_remove(Hashtable *hashtable, char *key);
 void ht_free(Hashtable *hashtable, void(*free_val) (void *));
+
+#ifdef DEBUG
+#ifdef WIN32
+
+#include <windows.h>
+#define TIME_T LARGE_INTEGER
+#define FREQ_T LARGE_INTEGER
+#define TIME(t) QueryPerformanceCounter(&(t))
+#define FREQ(f) QueryPerformanceFrequency(&(f))
+#define ELASPED_TIME(t1, t2, freq) ((t2).QuadPart - (t1).QuadPart) * 1000.0 / (freq).QuadPart
+
+#else
+
+#include <sys/time.h>
+#define TIME_T struct timeval
+#define FREQ_T double
+#define TIME(t) gettimeofday(&(t), NULL)
+#define FREQ(f) 1.0
+#define ELASPED_TIME(t1, t2, freq) ((t2).tv_sec - (t1).tv_sec) * 1000.0 + ((t2).tv_usec - (t1).tv_usec) / 1000.0
+
+#endif
+
+#ifdef DEBUG
+static int int_calls = 0;
+static int array_calls = 0;
+static int env_calls = 0;
+
+static int int_count = 0;
+static int array_count = 0;
+static int null_count = 0;
+static int env_count = 0;
+
+static double lookup_time_in_ms = 0.0;
+static double total_time_in_ms = 0.0;
+#endif
+#endif
+
 
 
 // hashtable.c
@@ -570,7 +608,27 @@ void* peek() {
     return vector_peek(operand);
 }
 
+#ifdef DEBUG
+void print_stats() {
+    fprintf(stderr, "int calls: %d.\n", int_calls);
+    fprintf(stderr, "array calls: %d.\n", array_calls);
+    fprintf(stderr, "env calls: %d.\n", env_calls);
+    fprintf(stderr, "total method calls: %d.\n", int_calls + array_calls + env_calls);
+    
+    fprintf(stderr, "int objects: %d.\n", int_count);
+    fprintf(stderr, "array objects: %d.\n", array_count);
+    fprintf(stderr, "null objects: %d.\n", null_count);
+    fprintf(stderr, "env objects: %d.\n", env_count);
+    fprintf(stderr, "total objects: %d.\n", int_count + array_count + null_count + env_count);
+    
+    fprintf(stderr, "lookup time: %f ms.\n", lookup_time_in_ms);
+    fprintf(stderr, "total time: %f ms.\n", total_time_in_ms);
+}
+#endif
+
+
 void interpret_bc(Program* p) {
+
     vm_init(p);
     //printf("Interpreting Bytecode Program:\n");
     //print_prog(p);
@@ -699,6 +757,10 @@ void interpret_bc(Program* p) {
                 //printf("%d\n",receiver->type);
                 switch (receiver->type) {
                     case Int: {
+#ifdef DEBUG
+                        ++ int_calls;
+#endif
+                        
                         if (debug) printf("Int call slot\n");
                         IntObj* iobj = (IntObj*)receiver;
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
@@ -735,6 +797,10 @@ void interpret_bc(Program* p) {
                     }
 
                     case Array: {
+#ifdef DEBUG
+                        ++ array_calls;
+#endif
+                        
                         if (debug) printf("Array call slot\n");
                         ArrayObj* aobj = (ArrayObj*)receiver;
                         if (strcmp(name->value, "length") == 0)
@@ -756,6 +822,10 @@ void interpret_bc(Program* p) {
                     }
 
                     case Env: {
+#ifdef DEBUG
+                        ++ env_calls;
+#endif
+
                         EnvObj* env = (EnvObj*)receiver;
                         StringValue *name = vector_get(p->values, call_slot->name);
                         assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
@@ -871,8 +941,12 @@ void interpret_bc(Program* p) {
                 pc = t->return_addr.pc;
                 free_frame(t);
 
-                if (local_frame == NULL)
+                if (local_frame == NULL){
+#ifdef DEBUG
+                    print_stats();
+#endif
                     return;
+                }
 
                 break;
             }
