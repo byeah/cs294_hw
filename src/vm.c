@@ -337,7 +337,7 @@ void add_entry(EnvObj* env, char* name, void* entry) {
 
 inline
 void* get_entry(EnvObj* env, char* name) {
-#ifdef DEBUG
+#ifdef DEBUG2
     TIME_T t1, t2;
     FREQ_T freq;
 
@@ -348,7 +348,7 @@ void* get_entry(EnvObj* env, char* name) {
     while (current_env != NULL) {
         void* entry = ht_get(current_env->table, name);
         if (entry != NULL) {
-#ifdef DEBUG
+#ifdef DEBUG2
             TIME(t2);
             lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
 #endif
@@ -359,7 +359,7 @@ void* get_entry(EnvObj* env, char* name) {
         }
     }
 
-#ifdef DEBUG
+#ifdef DEBUG2
     TIME(t2);
     lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
 #endif
@@ -628,7 +628,13 @@ void print_stats() {
 
 
 void interpret_bc(Program* p) {
-
+#ifdef DEBUG
+    TIME_T t1, t2;
+    FREQ_T freq;
+    
+    FREQ(freq);
+    TIME(t1);
+#endif
     vm_init(p);
     //printf("Interpreting Bytecode Program:\n");
     //print_prog(p);
@@ -943,6 +949,8 @@ void interpret_bc(Program* p) {
 
                 if (local_frame == NULL){
 #ifdef DEBUG
+                    TIME(t2);
+                    total_time_in_ms += ELASPED_TIME(t1, t2, freq);
                     print_stats();
 #endif
                     return;
