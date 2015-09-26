@@ -337,7 +337,7 @@ void add_entry(EnvObj* env, char* name, void* entry) {
 
 inline
 void* get_entry(EnvObj* env, char* name) {
-#ifdef DEBUG2
+#ifdef DEBUG
     TIME_T t1, t2;
     FREQ_T freq;
 
@@ -348,7 +348,7 @@ void* get_entry(EnvObj* env, char* name) {
     while (current_env != NULL) {
         void* entry = ht_get(current_env->table, name);
         if (entry != NULL) {
-#ifdef DEBUG2
+#ifdef DEBUG
             TIME(t2);
             lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
 #endif
@@ -359,7 +359,7 @@ void* get_entry(EnvObj* env, char* name) {
         }
     }
 
-#ifdef DEBUG2
+#ifdef DEBUG
     TIME(t2);
     lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
 #endif
