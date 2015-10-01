@@ -6,7 +6,9 @@
 #include "compiler.h"
 #include "bytecode.h"
 
-
+#ifdef _MSC_VER
+#define inline __inline
+#endif
 
 // hashtable.c
 
