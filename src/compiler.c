@@ -33,6 +33,7 @@ Hashtable_i* ht_create_i(int size) {
     }
     
     hashtable->size = size;
+    hashtable->max_value = -1;
     
     return hashtable;
 }
@@ -72,6 +73,9 @@ void ht_put_i(Hashtable_i* hashtable, char* key, int value) {
     entry_t_i* newpair = NULL;
     entry_t_i* current = NULL;
     entry_t_i* prev = NULL;
+    
+    if (value > hashtable->max_value)
+        hashtable->max_value = value;
     
     int bin = ht_hash_i(hashtable, key);
     current = hashtable->table[bin];
@@ -278,6 +282,20 @@ ByteIns* make_call_slot(int id,int n){
     return (ByteIns*) ins;
 }
 
+ByteIns* make_set_slot(int id) {
+    SetSlotIns* ins = (SetSlotIns*)malloc(sizeof(SetSlotIns));
+    ins->tag = SET_SLOT_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_get_slot(int id) {
+    SlotIns* ins = (SlotIns*)malloc(sizeof(SlotIns));
+    ins->tag = SLOT_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+
+}
 
 ByteIns* make_label_ins(int id) {
     LabelIns* ins = (LabelIns*)malloc(sizeof(LabelIns));
@@ -356,6 +374,7 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             printf("debug: OBJECT\n");
 #endif
             ObjectExp* e2 = (ObjectExp*)e;
+            compile_exp(genv, env, m, e2->parent);
             int class_id = make_class();
             ClassValue* c = vector_get(pro->values, class_id);
             for(int i=0;i<e2->nslots;i++)
@@ -363,50 +382,26 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             addIns(m, make_object(class_id));
             break;
         }
-/*        case SLOT_EXP: {
+        case SLOT_EXP: {
 #ifdef DEBUG
             printf("debug: Slot exp\n");
 #endif
             SlotExp* e2 = (SlotExp*)e;
-            Obj* obj = eval_exp(genv, env, e2->exp);
-            if (obj->type != Env) {
-                printf("Error: Accessing %s from a non-object value.\n", e2->name);
-                exit(-1);
-            }
-            Entry* ent = get_entry((EnvObj*)obj, e2->name);
-            if (ent == NULL) {
-                printf("Error: %s is not found in the object.\n", e2->name);
-                exit(-1);
-            }
-            if (ent->type != Var) {
-                printf("Error: %s should be Var in the object.\n", e2->name);
-                exit(-1);
-            }
-            return ((VarEntry*)ent)->value;
+            compile_exp(genv, env, m, e2->exp);
+            addIns(m, make_get_slot(getStrId(e2->name)));
+            break;
         }
         case SET_SLOT_EXP: {
 #ifdef DEBUG
             printf("debug: Slot Set\n");
 #endif
             SetSlotExp* e2 = (SetSlotExp*)e;
-            Obj* obj = eval_exp(genv, env, e2->exp);
-            if (obj->type != Env) {
-                printf("Error: Accessing %s from a non-object value.\n", e2->name);
-                exit(-1);
-            }
-            Entry* ent = get_entry((EnvObj*)obj, e2->name);
-            if (ent == NULL) {
-                printf("Error: %s is not found in the object.\n", e2->name);
-                exit(-1);
-            }
-            if (ent->type != Var) {
-                printf("Error: %s should be Var in the object.\n", e2->name);
-                exit(-1);
-            }
-            //add_entry((EnvObj*)obj, e2->name, make_var_entry(eval_exp(genv, env, e2->value)));
-            ((VarEntry*)ent)->value = eval_exp(genv, env, e2->value);
-            return (Obj*)make_null_obj();
-        }*/
+            compile_exp(genv, env, m, e2->exp);
+            compile_exp(genv, env, m, e2->value);
+            addIns(m, make_set_slot(getStrId(e2->name)));
+            addIns(m, make_drop());
+            break;
+        }
         case CALL_SLOT_EXP: {
 #ifdef DEBUG
             printf("debug: Slot Call\n");
@@ -457,14 +452,14 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
                 addIns(m, make_setLocal(id));
             }
             else
-                if ((id = ht_get_i(genv, e2->name)) >=0) {
-                    addIns(m, make_setGlobal(getStrId(e2->name)));
+                //if ((id = ht_get_i(genv, e2->name)) >=0) {
+                addIns(m, make_setGlobal(getStrId(e2->name)));
                     //add_entry(genv, e2->name, make_var_entry(res));
-                }
+                /*}
                 else {
                     printf("Error: variable not found when setting its value\n");
                     exit(-1);
-                }
+                }*/
             addIns(m, make_drop());
             break;
         }
@@ -511,7 +506,7 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             if (env != NULL)
                 id = ht_get_i(env, e2->name);
             if (id < 0) {
-                id = ht_get_i(genv, e2->name);
+                /*id = ht_get_i(genv, e2->name);
                 if (id  < 0) {
                     printf("Error: variable not found when referring\n");
                     exit(-1);
@@ -519,7 +514,7 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
                 if (((Value*)vector_get(pro->values, id))->tag != SLOT_VAL) {
                     printf("Error: Referring to a non-variable\n");
                     exit(-1);
-                }
+                }*/
                 addIns(m, make_getGlobal(getStrId(e2->name)));
             }
             else {
@@ -547,8 +542,9 @@ int compile_slotstmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, SlotSt
             int func_id = make_method(s2->nargs, s2->name);
             MethodValue* func = vector_get(pro->values, func_id);
             Hashtable_i* new_env = ht_create_i(1007);
+            ht_put_i(new_env, "this", 0);
             for(int i=0;i<s2->nargs;i++)
-                ht_put_i(new_env, s2->args[i], i);
+                ht_put_i(new_env, s2->args[i], i+1);
             compile_stmt(genv, new_env, func, s2->body);
             addIns(func, make_return());
             return func_id;
@@ -577,8 +573,8 @@ void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt
                 addIns(m, make_setGlobal(getStrId(s2->name)));
             }
             else{
-                int id = m->nlocals+m->nargs;
-                ht_put_i(env, s2->name, m->nlocals+m->nargs);
+                int id = env->max_value+1;
+                ht_put_i(env, s2->name, id);
                 m->nlocals++;
                 compile_exp(genv, env, m, s2->exp);
                 addIns(m, make_setLocal(id));
@@ -634,8 +630,7 @@ Program* compile (ScopeStmt* stmt) {
     nullId = make_null();
     labelCnt = 0;
     compile_stmt(ht_create_i(1007),NULL,vector_get(pro->values, pro->entry),stmt);
-    print_prog(pro);
-    printf("\n");
+//    print_prog(pro);    printf("\n");
     return pro;
 }
 

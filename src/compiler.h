@@ -16,6 +16,7 @@ typedef struct entry_s_i entry_t_i;
 struct hashtable_s_i {
     int size;
     struct entry_s_i** table;
+    int max_value;
 };
 
 typedef struct hashtable_s_i Hashtable_i;
@@ -57,6 +58,8 @@ ByteIns* make_drop();
 
 ByteIns* make_object(int);
 ByteIns* make_call_slot(int,int);
+ByteIns* make_set_slot(int);
+ByteIns* make_get_slot(int);
 
 ByteIns* make_label_ins(int);
 ByteIns* make_branch(int);
