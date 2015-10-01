@@ -56,10 +56,16 @@ ByteIns* make_getGlobal(int);
 ByteIns* make_drop();
 
 ByteIns* make_object(int);
+ByteIns* make_call_slot(int,int);
 
+ByteIns* make_label_ins(int);
+ByteIns* make_branch(int);
+ByteIns* make_goto(int);
+ByteIns* make_return();
 ByteIns* make_call(int,int);
 
 
+char* new_label();
 
 int compile_slotstmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, SlotStmt* s); // Return the slotValue id in the constant pool
 

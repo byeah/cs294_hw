@@ -6,6 +6,7 @@
 #include "compiler.h"
 #include "bytecode.h"
 
+//#define DEBUG
 #ifdef _MSC_VER
 #define inline __inline
 #endif
@@ -139,6 +140,7 @@ void ht_clear_i(Hashtable_i *hashtable) {
 Program* pro;
 Hashtable_i* names;
 int nullId;
+int labelCnt;
 
 int make_int(int value){  // Can optimize
     IntValue* v = (IntValue*)malloc(sizeof(IntValue));
@@ -184,8 +186,21 @@ int make_method(int args,char* name){
 }
 
 int make_slot(char* name){
-    return -1;
+    SlotValue* v = (SlotValue*)malloc(sizeof(SlotValue));
+    v->tag = SLOT_VAL;
+    v->name = getStrId(name);
+    vector_add(pro->values,v);
+    return pro->values->size-1;
 }
+
+int make_class() {
+    ClassValue* v = (ClassValue*)malloc(sizeof(ClassValue));
+    v->tag = CLASS_VAL;
+    v->slots = make_vector();
+    vector_add(pro->values,v);
+    return pro->values->size-1;
+}
+
 
 
 
@@ -208,14 +223,88 @@ ByteIns* make_print(int id,int n) {
     return (ByteIns*)ins;
 }
 
-ByteIns* make_array();
-ByteIns* make_setLocal(int);
-ByteIns* make_getLocal(int);
-ByteIns* make_setGlobal(int);
-ByteIns* make_getGlobal(int);
-ByteIns* make_drop();
+ByteIns* make_array(){
+    ByteIns* ins = (ByteIns*)malloc(sizeof(ByteIns));
+    ins->tag = ARRAY_OP;
+    return ins;
+}
 
-ByteIns* make_object(int);
+ByteIns* make_setLocal(int id) {
+    SetLocalIns* ins = (SetLocalIns*)malloc(sizeof(SetLocalIns));
+    ins->tag = SET_LOCAL_OP;
+    ins->idx = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_getLocal(int id) {
+    GetLocalIns* ins = (GetLocalIns*)malloc(sizeof(GetLocalIns));
+    ins->tag = GET_LOCAL_OP;
+    ins->idx = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_setGlobal(int id) {
+    SetGlobalIns* ins = (SetGlobalIns*)malloc(sizeof(SetGlobalIns));
+    ins->tag = SET_GLOBAL_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_getGlobal(int id) {
+    GetGlobalIns* ins = (GetGlobalIns*)malloc(sizeof(GetGlobalIns));
+    ins->tag = GET_GLOBAL_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_drop() {
+    ByteIns* ins = (ByteIns*)malloc(sizeof(ByteIns));
+    ins->tag = DROP_OP;
+    return ins;
+}
+
+ByteIns* make_object(int id) {
+    ObjectIns* ins = (ObjectIns*)malloc(sizeof(ObjectIns));
+    ins->tag = OBJECT_OP;
+    ins->class = id;
+    return (ByteIns*)ins;
+}
+
+ByteIns* make_call_slot(int id,int n){
+    CallSlotIns* ins = (CallSlotIns*)malloc(sizeof(CallSlotIns));
+    ins->tag = CALL_SLOT_OP;
+    ins->name = id;
+    ins->arity = n;
+    return (ByteIns*) ins;
+}
+
+
+ByteIns* make_label_ins(int id) {
+    LabelIns* ins = (LabelIns*)malloc(sizeof(LabelIns));
+    ins->tag = LABEL_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_branch(int id) {
+    BranchIns* ins = (BranchIns*)malloc(sizeof(BranchIns));
+    ins->tag = BRANCH_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_goto(int id) {
+    GotoIns* ins = (GotoIns*)malloc(sizeof(GotoIns));
+    ins->tag = GOTO_OP;
+    ins->name = id;
+    return (ByteIns*) ins;
+}
+
+ByteIns* make_return() {
+    ByteIns* ins = (ByteIns*)malloc(sizeof(ByteIns));
+    ins->tag = RETURN_OP;
+    return ins;
+}
 
 ByteIns* make_call(int id,int n) {
     CallIns* ins = (CallIns*)malloc(sizeof(CallIns));
@@ -225,6 +314,11 @@ ByteIns* make_call(int id,int n) {
     return (ByteIns*)ins;
 }
 
+char* new_label() {
+    char* name = malloc(sizeof(char)*15);
+    sprintf(name,"__LABEL__%d",labelCnt++);
+    return name;
+}
 
 void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
     switch (e->tag) {
@@ -250,7 +344,7 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             addIns(m, make_print(formatId,e2->nexps));
             break;
         }
-        /*case ARRAY_EXP: {
+        case ARRAY_EXP: {
             ArrayExp* e2 = (ArrayExp*)e;
             compile_exp(genv, env, m, e2->length);
             compile_exp(genv, env, m, e2->init);
@@ -263,11 +357,12 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
 #endif
             ObjectExp* e2 = (ObjectExp*)e;
             int class_id = make_class();
+            ClassValue* c = vector_get(pro->values, class_id);
             for(int i=0;i<e2->nslots;i++)
-                compile_slotstmt(genv, env, m, e2->slots[i]);
+                vector_add(c->slots, (void*)compile_slotstmt(genv, env, m, e2->slots[i]));
             addIns(m, make_object(class_id));
             break;
-        }*/
+        }
 /*        case SLOT_EXP: {
 #ifdef DEBUG
             printf("debug: Slot exp\n");
@@ -312,7 +407,7 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             ((VarEntry*)ent)->value = eval_exp(genv, env, e2->value);
             return (Obj*)make_null_obj();
         }*/
-        /*case CALL_SLOT_EXP: {
+        case CALL_SLOT_EXP: {
 #ifdef DEBUG
             printf("debug: Slot Call\n");
 #endif
@@ -320,105 +415,13 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
 #ifdef DEBUG
             printf("debug: Calling %s\n", e2->name);
 #endif
-            Obj* obj = eval_exp(genv, env, e2->exp);
-            
-            switch (obj->type) {
-                case Int: {
-#ifdef DEBUG
-                    ++int_calls;
-#endif
-                    IntObj* iobj = (IntObj*)obj;
-                    Obj* para = eval_exp(genv, env, e2->args[0]);
-                    
-                    if (para->type != Int) {
-                        printf("Error: Operand %s to Int must be Int.\n", e2->name);
-                        exit(-1);
-                    }
-                    IntObj* ipara = (IntObj*)para;
-                    
-                    if (strcmp(e2->name, "add") == 0)
-                        return (Obj*)add(iobj, ipara);
-                    if (strcmp(e2->name, "sub") == 0)
-                        return (Obj*)subtract(iobj, ipara);
-                    if (strcmp(e2->name, "mul") == 0)
-                        return (Obj*)multiply(iobj, ipara);
-                    if (strcmp(e2->name, "div") == 0)
-                        return (Obj*)divide(iobj, ipara);
-                    if (strcmp(e2->name, "mod") == 0)
-                        return (Obj*)modulo(iobj, ipara);
-                    if (strcmp(e2->name, "lt") == 0)
-                        return (Obj*)lt(iobj, ipara);
-                    if (strcmp(e2->name, "gt") == 0)
-                        return (Obj*)gt(iobj, ipara);
-                    if (strcmp(e2->name, "le") == 0)
-                        return (Obj*)le(iobj, ipara);
-                    if (strcmp(e2->name, "ge") == 0)
-                        return (Obj*)ge(iobj, ipara);
-                    if (strcmp(e2->name, "eq") == 0)
-                        return (Obj*)eq(iobj, ipara);
-                    
-                    printf("Error: Operator %s not recognized.\n", e2->name);
-                    exit(-1);
-                }
-                    
-                case Array: {
-#ifdef DEBUG
-                    ++array_calls;
-#endif
-                    ArrayObj* aobj = (ArrayObj*)obj;
-                    if (strcmp(e2->name, "length") == 0)
-                        return (Obj*)array_length(aobj);
-                    IntObj* index = (IntObj*)eval_exp(genv, env, e2->args[0]);
-                    if (strcmp(e2->name, "set") == 0) {
-                        array_set(aobj, index, eval_exp(genv, env, e2->args[1]));
-                        return (Obj*)make_null_obj();
-                    }
-                    if (strcmp(e2->name, "get") == 0)
-                        return array_get(aobj, index);
-                    printf("Error: Operator %s not recognized.\n", e2->name);
-                    exit(-1);
-                }
-                    
-                case Env: {
-#ifdef DEBUG
-                    ++env_calls;
-#endif
-                    Entry* ent = get_entry((EnvObj*)obj, e2->name);
-                    
-                    if (ent == NULL) {
-                        printf("Error: Function %s not found.\n", e2->name);
-                        exit(-1);
-                    }
-                    if (ent->type != Func) {
-                        printf("Error: Calling %s that is not a Function in the object.\n", e2->name);
-                        exit(-1);
-                    }
-                    
-                    FuncEntry* func = (FuncEntry*)ent;
-                    
-                    if (e2->nargs != func->nargs) {
-                        printf("Error: Args number not match when calling object method %s. Giving %d while %d is required.\n", e2->name, e2->nargs, func->nargs);
-                        exit(-1);
-                    }
-                    
-                    EnvObj* new_env = make_env_obj(NULL);
-                    for (int i = 0; i < e2->nargs; i++) {
-                        add_entry(new_env, func->args[i], make_var_entry(eval_exp(genv, env, e2->args[i])));
-                    }
-                    add_entry(new_env, "this", make_var_entry(obj));
-                    Obj* res = eval_stmt(genv, new_env, func->body);
-                    
-                    ht_clear(new_env->table);
-                    free(new_env);
-                    
-                    return res;
-                }
-                    
-                default:
-                    printf("Error: Calling %s from a NULL reference.\n", e2->name);
-                    exit(-1);
-            }
-        }*/
+            compile_exp(genv, env, m, e2->exp);
+            for (int i = 0; i < e2->nargs; i++)
+                compile_exp(genv, env, m, e2->args[i]);
+            int sid = getStrId(e2->name);
+            addIns(m, make_call_slot(sid, e2->nargs+1));
+            break;
+        }
         case CALL_EXP: {
 #ifdef DEBUG
             printf("debug: CALL\n");
@@ -443,72 +446,87 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             addIns(m,make_call(getStrId(e2->name),e2->nargs));
             break;
         }
-        /*case SET_EXP: {
+        case SET_EXP: {
 #ifdef DEBUG
             printf("debug: SET\n");
 #endif
             SetExp* e2 = (SetExp*)e;
-            Obj* res = eval_exp(genv, env, e2->exp);
-            Entry* ent;
-            if (env != NULL && (ent = get_entry(env, e2->name)) != NULL) {
-                //add_entry(env, e2->name, make_var_entry(res));
+            compile_exp(genv, env, m, e2->exp);
+            int id;
+            if (env != NULL && (id = ht_get_i(env, e2->name)) >=0) {
+                addIns(m, make_setLocal(id));
             }
             else
-                if ((ent = get_entry(genv, e2->name)) != NULL) {
+                if ((id = ht_get_i(genv, e2->name)) >=0) {
+                    addIns(m, make_setGlobal(getStrId(e2->name)));
                     //add_entry(genv, e2->name, make_var_entry(res));
                 }
                 else {
                     printf("Error: variable not found when setting its value\n");
                     exit(-1);
                 }
-            if (ent->type != Var){
-                printf("Error: Setting value to a function name %s\n",e2->name);
-                exit(-1);
-            }
-            ((VarEntry*)ent)->value = res;
-            return NULL;
+            addIns(m, make_drop());
+            break;
         }
         case IF_EXP: {
 #ifdef DEBUG
             printf("debug: If\n");
 #endif
             IfExp* e2 = (IfExp*)e;
-            Obj* pred = eval_exp(genv, env, e2->pred);
-            if (pred->type == Null)
-                return eval_stmt(genv, env, e2->alt);
-            else
-                return eval_stmt(genv, env, e2->conseq);
+            int label1 = getStrId(new_label());
+            int label2 = getStrId(new_label());
+            compile_exp(genv, env, m, e2->pred);
+            addIns(m, make_branch(label1));
+            compile_stmt(genv, env, m, e2->alt);
+            addIns(m, make_goto(label2));
+            addIns(m, make_label_ins(label1));
+            compile_stmt(genv, env, m, e2->conseq);
+            addIns(m, make_label_ins(label2));
+            break;
         }
         case WHILE_EXP: {
 #ifdef DEBUG
             printf("debug: While\n");
 #endif
             WhileExp* e2 = (WhileExp*)e;
-            while (eval_exp(genv, env, e2->pred)->type == Int) {
-                eval_stmt(genv, env, e2->body);
-            }
-            return (Obj*)make_null_obj();
+            int start = getStrId(new_label());
+            int body = getStrId(new_label());
+            int end = getStrId(new_label());
+            addIns(m, make_label_ins(start));
+            compile_exp(genv, env, m, e2->pred);
+            addIns(m, make_branch(body));
+            addIns(m, make_goto(end));
+            addIns(m, make_label_ins(body));
+            compile_stmt(genv, env, m, e2->body);
+            addIns(m, make_goto(start));
+            addIns(m, make_label_ins(end));
+            break;
         }
         case REF_EXP: {
-#ifdef DEBUG
-            printf("debug: REF\n");
-#endif
             RefExp* e2 = (RefExp*)e;
-            Entry* ent = NULL;
+#ifdef DEBUG
+            printf("debug: REF  %s\n",e2->name);
+#endif
+            int id = -1;
             if (env != NULL)
-                ent = get_entry(env, e2->name);
-            if (ent == NULL)
-                ent = get_entry(genv, e2->name);
-            if (ent == NULL) {
-                printf("Error: variable not found when referring\n");
-                exit(-1);
+                id = ht_get_i(env, e2->name);
+            if (id < 0) {
+                id = ht_get_i(genv, e2->name);
+                if (id  < 0) {
+                    printf("Error: variable not found when referring\n");
+                    exit(-1);
+                }
+                if (((Value*)vector_get(pro->values, id))->tag != SLOT_VAL) {
+                    printf("Error: Referring to a non-variable\n");
+                    exit(-1);
+                }
+                addIns(m, make_getGlobal(getStrId(e2->name)));
             }
-            if (ent->type == Func) {
-                printf("Error: Should ref to variable rather than function\n");
-                exit(-1);
+            else {
+                addIns(m, make_getLocal(id));
             }
-            return ((VarEntry*)ent)->value;
-        }*/
+            break;
+        }
         default:
             printf("Unrecognized Expression with tag %d\n", e->tag);
             exit(-1);
@@ -528,7 +546,11 @@ int compile_slotstmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, SlotSt
             SlotMethod* s2 = (SlotMethod*)s;
             int func_id = make_method(s2->nargs, s2->name);
             MethodValue* func = vector_get(pro->values, func_id);
-            compile_stmt(genv, ht_create_i(107), func, s2->body);
+            Hashtable_i* new_env = ht_create_i(1007);
+            for(int i=0;i<s2->nargs;i++)
+                ht_put_i(new_env, s2->args[i], i);
+            compile_stmt(genv, new_env, func, s2->body);
+            addIns(func, make_return());
             return func_id;
         }
         default:
@@ -551,12 +573,17 @@ void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt
                 int slot_id = make_slot(s2->name);
                 ht_put_i(genv, s2->name, slot_id);
                 vector_add(pro->slots, (void*)slot_id);
+                compile_exp(genv, env, m, s2->exp);
+                addIns(m, make_setGlobal(getStrId(s2->name)));
             }
             else{
-                ht_put_i(env, s2->name, m->nlocals);
+                int id = m->nlocals+m->nargs;
+                ht_put_i(env, s2->name, m->nlocals+m->nargs);
                 m->nlocals++;
                 compile_exp(genv, env, m, s2->exp);
+                addIns(m, make_setLocal(id));
             }
+            addIns(m, make_drop());
             break;
         }
         case FN_STMT: {
@@ -566,9 +593,13 @@ void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt
             ScopeFn* s2 = (ScopeFn*)s;
             int func_id = make_method(s2->nargs, s2->name);
             MethodValue* func = vector_get(pro->values, func_id);
-            compile_stmt(genv, ht_create_i(107), func, s2->body);
+            Hashtable_i* new_env = ht_create_i(1007);
+            for(int i=0;i<s2->nargs;i++)
+                ht_put_i(new_env, s2->args[i], i);
             ht_put_i(genv, s2->name, func_id);
+            compile_stmt(genv, new_env, func, s2->body);
             vector_add(pro->slots, (void*)func_id);
+            addIns(func, make_return());
             break;
         }
         case SEQ_STMT: {
@@ -594,8 +625,6 @@ void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt
     }
 }
 
-
-
 Program* compile (ScopeStmt* stmt) {
     pro = (Program*)malloc(sizeof(Program));
     pro->slots = make_vector();
@@ -603,6 +632,7 @@ Program* compile (ScopeStmt* stmt) {
     names = ht_create_i(10007);
     pro->entry = make_method(0,"__ENTRY_FUNC__"); //Reserved name for entry func
     nullId = make_null();
+    labelCnt = 0;
     compile_stmt(ht_create_i(1007),NULL,vector_get(pro->values, pro->entry),stmt);
     print_prog(pro);
     printf("\n");
