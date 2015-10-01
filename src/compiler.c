@@ -6,6 +6,7 @@
 #include "compiler.h"
 #include "bytecode.h"
 
+//#define DEBUG
 
 
 // hashtable.c
@@ -161,6 +162,7 @@ int getStrId(char* str){ // Return the string id in the constant pool, if non-ex
     int sid = ht_get_i(names, str);
     if (sid < 0){
         StringValue* s = (StringValue*)malloc(sizeof(StringValue));
+            s->tag = STRING_VAL;
         s->value = str;
         vector_add(pro->values, s);
         sid = pro->values->size-1;
@@ -437,7 +439,7 @@ void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* e){
             for (int i = 0; i < e2->nargs; i++) {
                 compile_exp(genv, env, m, e2->args[i]);
             }
-            addIns(m,make_call(func_id,e2->nargs));
+            addIns(m,make_call(getStrId(e2->name),e2->nargs));
             break;
         }
         /*case SET_EXP: {
@@ -547,6 +549,7 @@ void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt
             if (env == NULL){
                 int slot_id = make_slot(s2->name);
                 ht_put_i(genv, s2->name, slot_id);
+                vector_add(pro->slots, (void*)slot_id);
             }
             else{
                 ht_put_i(env, s2->name, m->nlocals);
@@ -564,6 +567,7 @@ void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt
             MethodValue* func = vector_get(pro->values, func_id);
             compile_stmt(genv, ht_create_i(107), func, s2->body);
             ht_put_i(genv, s2->name, func_id);
+            vector_add(pro->slots, (void*)func_id);
             break;
         }
         case SEQ_STMT: {
@@ -595,10 +599,12 @@ Program* compile (ScopeStmt* stmt) {
     pro = (Program*)malloc(sizeof(Program));
     pro->slots = make_vector();
     pro->values = make_vector();
+    names = ht_create_i(10007);
     pro->entry = make_method(0,"__ENTRY_FUNC__"); //Reserved name for entry func
     nullId = make_null();
-    names = ht_create_i(10007);
     compile_stmt(ht_create_i(1007),NULL,vector_get(pro->values, pro->entry),stmt);
+    print_prog(pro);
+    printf("\n");
     return pro;
 }
 
