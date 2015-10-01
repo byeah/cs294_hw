@@ -70,11 +70,11 @@ ByteIns* make_call(int,int);
 
 char* new_label();
 
-int compile_slotstmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, SlotStmt* s); // Return the slotValue id in the constant pool
+int compile_slotstmt(Hashtable_i* env, MethodValue* m, SlotStmt* s); // Return the slotValue id in the constant pool
 
-void compile_stmt(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, ScopeStmt* s);
+void compile_stmt(Hashtable_i* env, MethodValue* m, ScopeStmt* s);
 
-void compile_exp(Hashtable_i* genv, Hashtable_i* env, MethodValue* m, Exp* exp);
+void compile_exp(Hashtable_i* env, MethodValue* m, Exp* exp);
 
 
 
