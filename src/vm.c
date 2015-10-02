@@ -38,44 +38,6 @@ void* ht_get(Hashtable *hashtable, char *key);
 void ht_remove(Hashtable *hashtable, char *key);
 void ht_free(Hashtable *hashtable, void(*free_val) (void *));
 
-#ifdef DEBUG
-#ifdef WIN32
-
-#include <windows.h>
-#define TIME_T LARGE_INTEGER
-#define FREQ_T LARGE_INTEGER
-#define TIME(t) QueryPerformanceCounter(&(t))
-#define FREQ(f) QueryPerformanceFrequency(&(f))
-#define ELASPED_TIME(t1, t2, freq) ((t2).QuadPart - (t1).QuadPart) * 1000.0 / (freq).QuadPart
-
-#else
-
-#include <sys/time.h>
-#define TIME_T struct timeval
-#define FREQ_T double
-#define TIME(t) gettimeofday(&(t), NULL)
-#define FREQ(f) 1.0
-#define ELASPED_TIME(t1, t2, freq) ((t2).tv_sec - (t1).tv_sec) * 1000.0 + ((t2).tv_usec - (t1).tv_usec) / 1000.0
-
-#endif
-
-#ifdef DEBUG
-static int int_calls = 0;
-static int array_calls = 0;
-static int env_calls = 0;
-
-static int int_count = 0;
-static int array_count = 0;
-static int null_count = 0;
-static int env_count = 0;
-
-static double lookup_time_in_ms = 0.0;
-static double total_time_in_ms = 0.0;
-#endif
-#endif
-
-
-
 // hashtable.c
 
 Hashtable* ht_create(int size) {
@@ -298,9 +260,6 @@ NullObj* make_null_obj() {
 
 inline
 EnvObj* make_env_obj(EnvObj* parent) {
-#ifdef DEBUG
-    ++ env_count;
-#endif
     if (parent && parent->type == Null)
         parent = NULL;
 
@@ -337,21 +296,10 @@ void add_entry(EnvObj* env, char* name, void* entry) {
 
 inline
 void* get_entry(EnvObj* env, char* name) {
-#ifdef DEBUG
-    TIME_T t1, t2;
-    FREQ_T freq;
-
-    FREQ(freq);
-    TIME(t1);
-#endif
     EnvObj* current_env = env;
     while (current_env != NULL) {
         void* entry = ht_get(current_env->table, name);
         if (entry != NULL) {
-#ifdef DEBUG
-            TIME(t2);
-            lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
-#endif
             return entry;
         }
         else {
@@ -359,19 +307,11 @@ void* get_entry(EnvObj* env, char* name) {
         }
     }
 
-#ifdef DEBUG
-    TIME(t2);
-    lookup_time_in_ms += ELASPED_TIME(t1, t2, freq);
-#endif
-
     return NULL;
 }
 
 inline
 IntObj* make_int_obj(int value) {
-#ifdef DEBUG
-    ++ int_count;
-#endif
     IntObj* o = malloc(sizeof(IntObj));
     o->type = Int;
     o->value = value;
@@ -430,9 +370,6 @@ Obj* ge(IntObj* x, IntObj *y) {
 
 inline
 ArrayObj* make_array_obj(IntObj *length, Obj* init) {
-#ifdef DEBUG
-    ++ array_count;
-#endif
     ArrayObj* o = malloc(sizeof(ArrayObj));
 
     o->type = Array;
@@ -608,33 +545,7 @@ void* peek() {
     return vector_peek(operand);
 }
 
-#ifdef DEBUG
-void print_stats() {
-    fprintf(stderr, "int calls: %d.\n", int_calls);
-    fprintf(stderr, "array calls: %d.\n", array_calls);
-    fprintf(stderr, "env calls: %d.\n", env_calls);
-    fprintf(stderr, "total method calls: %d.\n", int_calls + array_calls + env_calls);
-    
-    fprintf(stderr, "int objects: %d.\n", int_count);
-    fprintf(stderr, "array objects: %d.\n", array_count);
-    fprintf(stderr, "null objects: %d.\n", null_count);
-    fprintf(stderr, "env objects: %d.\n", env_count);
-    fprintf(stderr, "total objects: %d.\n", int_count + array_count + null_count + env_count);
-    
-    fprintf(stderr, "lookup time: %f ms.\n", lookup_time_in_ms);
-    fprintf(stderr, "total time: %f ms.\n", total_time_in_ms);
-}
-#endif
-
-
 void interpret_bc(Program* p) {
-#ifdef DEBUG
-    TIME_T t1, t2;
-    FREQ_T freq;
-    
-    FREQ(freq);
-    TIME(t1);
-#endif
     vm_init(p);
     //printf("Interpreting Bytecode Program:\n");
     //print_prog(p);
@@ -763,10 +674,6 @@ void interpret_bc(Program* p) {
                 //printf("%d\n",receiver->type);
                 switch (receiver->type) {
                     case Int: {
-#ifdef DEBUG
-                        ++ int_calls;
-#endif
-                        
                         if (debug) printf("Int call slot\n");
                         IntObj* iobj = (IntObj*)receiver;
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
@@ -803,10 +710,6 @@ void interpret_bc(Program* p) {
                     }
 
                     case Array: {
-#ifdef DEBUG
-                        ++ array_calls;
-#endif
-                        
                         if (debug) printf("Array call slot\n");
                         ArrayObj* aobj = (ArrayObj*)receiver;
                         if (strcmp(name->value, "length") == 0)
@@ -828,10 +731,6 @@ void interpret_bc(Program* p) {
                     }
 
                     case Env: {
-#ifdef DEBUG
-                        ++ env_calls;
-#endif
-
                         EnvObj* env = (EnvObj*)receiver;
                         StringValue *name = vector_get(p->values, call_slot->name);
                         assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
@@ -948,11 +847,6 @@ void interpret_bc(Program* p) {
                 free_frame(t);
 
                 if (local_frame == NULL){
-#ifdef DEBUG
-                    TIME(t2);
-                    total_time_in_ms += ELASPED_TIME(t1, t2, freq);
-                    print_stats();
-#endif
                     return;
                 }
 
