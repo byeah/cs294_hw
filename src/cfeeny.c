@@ -72,7 +72,7 @@ int main (int argc, char** argvs) {
 #ifdef DEBUG
   TIME(t2);
   interpret_time += ELASPED_TIME(t1, t2, freq);
-  fprintf(stderr, "compile: %f ms, interpret: %f ms, ratio: %f% \n",
+  fprintf(stderr, "compile: %f ms, interpret: %f ms, ratio: %f%% \n",
       compile_time, interpret_time, compile_time / (compile_time + interpret_time) * 100);
 #endif
 

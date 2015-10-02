@@ -6,12 +6,9 @@
 #include "bytecode.h"
 #include "vm.h"
 
-#define DEBUG
 #ifdef _MSC_VER
 #define inline __inline
 #endif
-
-int debug = 0;
 
 // hashtable.h
 
@@ -452,10 +449,12 @@ static Frame* local_frame = NULL;
 
 static inline
 void assert(int criteria, char *msg) {
+#ifdef DEBUG
     if (!criteria) {
         fprintf(stderr, msg);
         exit(1);
     }
+#endif
 }
 
 static inline
@@ -577,7 +576,6 @@ void interpret_bc(Program* p) {
                 break;
             }
             case PRINTF_OP: {
-                if (debug) printf("!!PRINT\n");
                 PrintfIns* printf_ins = (PrintfIns *)ins;
                 int* res = malloc(sizeof(int) * (printf_ins->arity));
                 //                IntObj* ii = vector_peek(operand);
@@ -600,7 +598,6 @@ void interpret_bc(Program* p) {
                 break;
             }
             case OBJECT_OP: {
-                if (debug) printf("!!OBJECT\n");
                 ObjectIns* obj_ins = (ObjectIns*)ins;
                 ClassValue* class = vector_get(p->values, obj_ins->class);
                 int slot_count = 0;
@@ -638,7 +635,6 @@ void interpret_bc(Program* p) {
                 break;
             }
             case SLOT_OP: {
-                if (debug) printf("!!SLOT_OP\n");
                 SlotIns* slot_ins = (SlotIns*)ins;
                 EnvObj* obj = pop();
                 assert(obj->type == Env, "Get slot should be with an object!");
@@ -649,7 +645,6 @@ void interpret_bc(Program* p) {
                 break;
             }
             case SET_SLOT_OP: {
-                if (debug) printf("!!SET_SLOT_OP\n");
                 SetSlotIns* set_slot_ins = (SetSlotIns*)ins;
                 Obj* value = pop();
                 EnvObj* obj = pop();
@@ -663,7 +658,6 @@ void interpret_bc(Program* p) {
             }
             case CALL_SLOT_OP: {
                 CallSlotIns* call_slot = (CallSlotIns*)ins;
-                if (debug) printf("   call-slot #%d %d\n", call_slot->name, call_slot->arity);
                 Obj** args = malloc(sizeof(Obj *) * (call_slot->arity));
                 for (int i = 0; i < call_slot->arity; i++) {
                     args[i] = pop();
@@ -674,7 +668,6 @@ void interpret_bc(Program* p) {
                 //printf("%d\n",receiver->type);
                 switch (receiver->type) {
                     case Int: {
-                        if (debug) printf("Int call slot\n");
                         IntObj* iobj = (IntObj*)receiver;
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
                         Obj* para = args[0];
@@ -710,7 +703,6 @@ void interpret_bc(Program* p) {
                     }
 
                     case Array: {
-                        if (debug) printf("Array call slot\n");
                         ArrayObj* aobj = (ArrayObj*)receiver;
                         if (strcmp(name->value, "length") == 0)
                             push((Obj*)array_length(aobj)); else
@@ -761,7 +753,6 @@ void interpret_bc(Program* p) {
             }
             case GET_LOCAL_OP: {
                 GetLocalIns *get_local_ins = (GetLocalIns *)ins;
-                if (debug) printf("!!GET_LOCAL %d\n", get_local_ins->idx);
                 push(vector_get(local_frame->slots, get_local_ins->idx));
                 break;
             }
@@ -821,8 +812,6 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, call_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
 
-                if (debug) printf("!!CALL %s\n", name->value);
-
                 MethodObj *method_obj = ht_get(global_vars, name->value);
                 assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
 
@@ -839,7 +828,6 @@ void interpret_bc(Program* p) {
                 break;
             }
             case RETURN_OP: {
-                if (debug) printf("!!Return\n");
                 Frame *t = local_frame;
                 local_frame = t->parent;
                 code = t->return_addr.code;
