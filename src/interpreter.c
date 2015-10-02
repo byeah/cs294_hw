@@ -5,7 +5,6 @@
 #include "ast.h"
 #include "interpreter.h"
 
-//#define DEBUG
 #ifdef _MSC_VER
 #define inline __inline
 #endif
@@ -294,42 +293,6 @@ Obj* eval_stmt(EnvObj* genv, EnvObj* env, ScopeStmt* s);
 Obj* eval_exp(EnvObj* genv, EnvObj* env, Exp* exp);
 
 // interpreter.c
-
-#ifdef DEBUG
-#ifdef WIN32
-
-#include <windows.h>
-#define TIME_T LARGE_INTEGER 
-#define FREQ_T LARGE_INTEGER 
-#define TIME(t) QueryPerformanceCounter(&(t))
-#define FREQ(f) QueryPerformanceFrequency(&(f))
-#define ELASPED_TIME(t1, t2, freq) ((t2).QuadPart - (t1).QuadPart) * 1000.0 / (freq).QuadPart
-
-#else
-
-#include <sys/time.h>  
-#define TIME_T struct timeval 
-#define FREQ_T double 
-#define TIME(t) gettimeofday(&(t), NULL)
-#define FREQ(f) 1.0
-#define ELASPED_TIME(t1, t2, freq) ((t2).tv_sec - (t1).tv_sec) * 1000.0 + ((t2).tv_usec - (t1).tv_usec) / 1000.0
-
-#endif
-
-#ifdef DEBUG
-static int int_calls = 0;
-static int array_calls = 0;
-static int env_calls = 0;
-
-static int int_count = 0;
-static int array_count = 0;
-static int null_count = 0;
-static int env_count = 0;
-
-static double lookup_time_in_ms = 0.0;
-static double total_time_in_ms = 0.0;
-#endif
-#endif
 
 static NullObj null_obj_singleton = { .type = Null };
 

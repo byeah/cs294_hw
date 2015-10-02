@@ -208,7 +208,7 @@ int make_class() {
 
 
 
-void addIns(MethodValue* m, ByteIns*ins){
+void addIns(MethodValue* m, ByteIns *ins){
     vector_add(m->code, ins);
 }
 
@@ -219,7 +219,7 @@ ByteIns* make_lit(int id) {
     return (ByteIns*)ins;
 }
 
-ByteIns* make_print(int id,int n) {
+ByteIns* make_print(int id, int n) {
     PrintfIns* ins = (PrintfIns*)malloc(sizeof(PrintfIns));
     ins->tag = PRINTF_OP;
     ins->format = id;
