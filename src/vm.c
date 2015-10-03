@@ -417,34 +417,28 @@ void free_label(LabelAddr* label) {
 typedef struct frame_t {
     Vector* slots; // Vector of Obj*
     LabelAddr return_addr;
-    struct frame_t* parent;
 } Frame;
-
-Frame* make_frame(Frame* parent, Vector* code, int pc, int num_slots) {
-    Frame* frame = (Frame *)malloc(sizeof(Frame));
-
-    frame->slots = make_vector();
-    vector_set_length(frame->slots, num_slots, NULL);
-
-    frame->return_addr.code = code;
-    frame->return_addr.pc = pc;
-
-    frame->parent = parent;
-
-    return frame;
-}
-
-void free_frame(Frame* frame) {
-    vector_free(frame->slots);
-    free(frame);
-}
 
 static Hashtable* global_vars = NULL;
 static Hashtable* labels = NULL;
-static Vector* code = NULL;
-static int pc = 0;
 static Vector* operand = NULL;
-static Frame* local_frame = NULL;
+static Frame stackframes[1024];
+static int frame_idx = -1;
+
+void push_frame(Vector* code, int pc, int num_slots) {
+    ++frame_idx;
+
+    stackframes[frame_idx].slots = make_vector();
+    vector_set_length(stackframes[frame_idx].slots, num_slots, NULL);
+
+    stackframes[frame_idx].return_addr.code = code;
+    stackframes[frame_idx].return_addr.pc = pc;
+}
+
+void pop_frame() {
+    vector_free(stackframes[frame_idx].slots);
+    --frame_idx;
+}
 
 
 static inline
@@ -464,10 +458,10 @@ void vm_init(Program* p) {
 
     // init entry
     MethodValue* entry_func = vector_get(p->values, p->entry);
-    local_frame = make_frame(NULL, NULL, 0, entry_func->nargs + entry_func->nlocals);
-    code = entry_func->code;
-    pc = 0;
-
+    
+    //local_frame = make_frame(NULL, NULL, 0, entry_func->nargs + entry_func->nlocals);
+    push_frame(entry_func->code, 0, entry_func->nargs + entry_func->nlocals);
+    
     // init global
     for (int i = 0; i < p->slots->size; ++i) {
         int index = (int)vector_get(p->slots, i);
@@ -518,14 +512,10 @@ static inline
 void vm_cleanup() {
     ht_free(global_vars, NULL);
     ht_free(labels, free);
-    code = NULL;
-    pc = 0;
     vector_free(operand);
 
-    while (local_frame != NULL) {
-        Frame* t = local_frame->parent;
-        free_frame(local_frame);
-        local_frame = t;
+    while (frame_idx >= 0) {
+        pop_frame();
     }
 }
 
@@ -548,8 +538,8 @@ void interpret_bc(Program* p) {
     vm_init(p);
     //printf("Interpreting Bytecode Program:\n");
     //print_prog(p);
-    while (pc < code->size) {
-        ByteIns* ins = vector_get(code, pc);
+    while (stackframes[frame_idx].return_addr.pc < stackframes[frame_idx].return_addr.code->size) {
+        ByteIns* ins = vector_get(stackframes[frame_idx].return_addr.code, stackframes[frame_idx].return_addr.pc);
         switch (ins->tag)
         {
             case LIT_OP: {
@@ -729,15 +719,16 @@ void interpret_bc(Program* p) {
 
                         MethodObj *method_obj = get_entry(env, name->value);
                         assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
-                        Frame* new_frame = make_frame(local_frame, code, pc,
-                            method_obj->method->nargs + method_obj->method->nlocals + 1);
-                        vector_set(new_frame->slots, 0, env);
+                        
+                        //Frame* new_frame = make_frame(local_frame, code, pc,
+                        //    method_obj->method->nargs + method_obj->method->nlocals + 1);
+                        
+                        push_frame(method_obj->method->code, -1, method_obj->method->nargs + method_obj->method->nlocals + 1);
+                      
+                        vector_set(stackframes[frame_idx].slots, 0, env);
                         for (int i = 0; i < call_slot->arity - 1; i++) {
-                            vector_set(new_frame->slots, i + 1, args[call_slot->arity - 2 - i]);
+                            vector_set(stackframes[frame_idx].slots, i + 1, args[call_slot->arity - 2 - i]);
                         }
-                        local_frame = new_frame;
-                        code = method_obj->method->code;
-                        pc = -1;
                         break;
                     }
                     default:
@@ -748,12 +739,12 @@ void interpret_bc(Program* p) {
             }
             case SET_LOCAL_OP: {
                 SetLocalIns *set_local_ins = (SetLocalIns *)ins;
-                vector_set(local_frame->slots, set_local_ins->idx, peek());
+                vector_set(stackframes[frame_idx].slots, set_local_ins->idx, peek());
                 break;
             }
             case GET_LOCAL_OP: {
                 GetLocalIns *get_local_ins = (GetLocalIns *)ins;
-                push(vector_get(local_frame->slots, get_local_ins->idx));
+                push(vector_get(stackframes[frame_idx].slots, get_local_ins->idx));
                 break;
             }
             case SET_GLOBAL_OP: {
@@ -786,8 +777,8 @@ void interpret_bc(Program* p) {
                     assert(name->tag == STRING_VAL, "Invalid object type for BRANCH_OP.\n");
                     LabelAddr* label = ht_get(labels, name->value);
                     assert(label != NULL, "Label not found in BRANCH_OP.\n");
-                    assert(label->code == code, "Cross method jump is not allowed for BRANCH_OP.\n");
-                    pc = label->pc;
+                    assert(label->code == stackframes[frame_idx].return_addr.code, "Cross method jump is not allowed for BRANCH_OP.\n");
+                    stackframes[frame_idx].return_addr.pc = label->pc;
                 }
                 break;
             }
@@ -797,8 +788,8 @@ void interpret_bc(Program* p) {
                 assert(name->tag == STRING_VAL, "Invalid object type for GOTO_OP.\n");
                 LabelAddr* label = ht_get(labels, name->value);
                 assert(label != NULL, "Label not found in GOTO_OP.\n");
-                assert(label->code == code, "Cross method jump is not allowed for GOTO_OP.\n");
-                pc = label->pc;
+                assert(label->code == stackframes[frame_idx].return_addr.code, "Cross method jump is not allowed for GOTO_OP.\n");
+                stackframes[frame_idx].return_addr.pc = label->pc;
                 break;
             }
             case CALL_OP: {
@@ -815,26 +806,19 @@ void interpret_bc(Program* p) {
                 MethodObj *method_obj = ht_get(global_vars, name->value);
                 assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
 
-                Frame* new_frame = make_frame(local_frame, code, pc,
-                    method_obj->method->nargs + method_obj->method->nlocals);
+                //Frame* new_frame = make_frame(local_frame, code, pc,
+                //    method_obj->method->nargs + method_obj->method->nlocals);
+                push_frame(method_obj->method->code, -1, method_obj->method->nargs + method_obj->method->nlocals);
 
                 for (int i = 0; i < call_ins->arity; i++) {
-                    vector_set(new_frame->slots, i, args[call_ins->arity - 1 - i]);
+                    vector_set(stackframes[frame_idx].slots, i, args[call_ins->arity - 1 - i]);
                 }
-
-                local_frame = new_frame;
-                code = method_obj->method->code;
-                pc = -1;
                 break;
             }
             case RETURN_OP: {
-                Frame *t = local_frame;
-                local_frame = t->parent;
-                code = t->return_addr.code;
-                pc = t->return_addr.pc;
-                free_frame(t);
+                pop_frame();
 
-                if (local_frame == NULL){
+                if (frame_idx < 0){
                     return;
                 }
 
@@ -845,7 +829,7 @@ void interpret_bc(Program* p) {
                 break;
             }
         }
-        ++pc;
+        ++(stackframes[frame_idx].return_addr.pc);
     }
 
     printf("\n");
