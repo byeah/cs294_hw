@@ -425,6 +425,7 @@ static Vector* operand = NULL;
 static Frame stackframes[1024];
 static int frame_idx = -1;
 
+static inline
 void push_frame(Vector* code, int pc, int num_slots) {
     ++frame_idx;
 
@@ -435,6 +436,7 @@ void push_frame(Vector* code, int pc, int num_slots) {
     stackframes[frame_idx].return_addr.pc = pc;
 }
 
+static inline
 void pop_frame() {
     vector_free(stackframes[frame_idx].slots);
     --frame_idx;
