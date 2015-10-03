@@ -13,6 +13,22 @@
 
 // hashtable.c
 
+struct entry_s_i {
+    char* key;
+    int value;
+    struct entry_s_i* next;
+};
+
+typedef struct entry_s_i entry_t_i;
+
+struct hashtable_s_i {
+    int size;
+    struct entry_s_i** table;
+    int max_value;
+};
+
+typedef struct hashtable_s_i Hashtable_i;
+
 Hashtable_i* ht_create_i(int size) {
     Hashtable_i* hashtable = NULL;
     
@@ -338,6 +354,37 @@ char* new_label() {
     return name;
 }
 
+static void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e);
+static void compile_stmt(Hashtable_i* env, MethodValue* m, ScopeStmt* s);
+
+static inline
+int compile_slotstmt(Hashtable_i* env, MethodValue* m, SlotStmt* s) { // Return the slotValue id in the constant pool
+    switch (s->tag) {
+        case VAR_STMT: {
+            SlotVar* s2 = (SlotVar*)s;
+            int slot_id = make_slot(s2->name);
+            compile_exp(env, m, s2->exp);
+            return slot_id;
+    }
+        case FN_STMT: {
+            SlotMethod* s2 = (SlotMethod*)s;
+            int func_id = make_method(s2->nargs, s2->name);
+            MethodValue* func = vector_get(pro->values, func_id);
+            Hashtable_i* new_env = ht_create_i(1007);
+            ht_put_i(new_env, "this", 0);
+            for (int i = 0; i<s2->nargs; i++)
+                ht_put_i(new_env, s2->args[i], i + 1);
+            compile_stmt(new_env, func, s2->body);
+            addIns(func, make_return());
+            return func_id;
+        }
+        default:
+            printf("Unrecognized slot statement with tag %d\n", s->tag);
+            exit(-1);
+}
+}
+
+static
 void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e){
     switch (e->tag) {
         case INT_EXP: {
@@ -529,33 +576,7 @@ void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e){
     }
 }
 
-inline
-int compile_slotstmt(Hashtable_i* env, MethodValue* m, SlotStmt* s){ // Return the slotValue id in the constant pool
-    switch (s->tag) {
-        case VAR_STMT: {
-            SlotVar* s2 = (SlotVar*)s;
-            int slot_id = make_slot(s2->name);
-            compile_exp(env, m, s2->exp);
-            return slot_id;
-        }
-        case FN_STMT: {
-            SlotMethod* s2 = (SlotMethod*)s;
-            int func_id = make_method(s2->nargs, s2->name);
-            MethodValue* func = vector_get(pro->values, func_id);
-            Hashtable_i* new_env = ht_create_i(1007);
-            ht_put_i(new_env, "this", 0);
-            for(int i=0;i<s2->nargs;i++)
-                ht_put_i(new_env, s2->args[i], i+1);
-            compile_stmt(new_env, func, s2->body);
-            addIns(func, make_return());
-            return func_id;
-        }
-        default:
-            printf("Unrecognized slot statement with tag %d\n", s->tag);
-            exit(-1);
-    }
-}
-
+static
 void compile_stmt(Hashtable_i* env, MethodValue* m, ScopeStmt* s){
     switch (s->tag) {
         case VAR_STMT: {
