@@ -231,13 +231,15 @@ static struct {
     int64_t total;
 } heap;
 
-inline static init_heap() {
+inline static 
+void init_heap() {
 	heap.head = malloc(1024 * 1024);
 	heap.used = 0;
 	heap.total = 1024 * 1024;
 }
 
-inline static free_heap() {
+inline static 
+void free_heap() {
 	free(heap.head);
 }
 
@@ -273,57 +275,57 @@ NullObj* make_null_obj() {
 	return halloc(sizeof(NullObj));
 }
 
-inline
+inline static
 IntObj* add(IntObj* x, IntObj *y) {
     return make_int_obj(x->value + y->value);
 }
 
-inline
+inline static
 IntObj* subtract(IntObj* x, IntObj *y) {
     return make_int_obj(x->value - y->value);
 }
 
-inline
+inline static
 IntObj* multiply(IntObj* x, IntObj *y) {
     return make_int_obj(x->value * y->value);
 }
 
-inline
+inline static
 IntObj* divide(IntObj* x, IntObj *y) {
     return make_int_obj(x->value / y->value);
 }
 
-inline
+inline static
 IntObj* modulo(IntObj* x, IntObj *y) {
     return make_int_obj(x->value % y->value);
 }
 
-inline
+inline static
 void* eq(IntObj* x, IntObj *y) {
     return (x->value == y->value) ? (void *) make_int_obj(0) : (void *) make_null_obj();
 }
 
-inline
+inline static
 void* lt(IntObj* x, IntObj *y) {
     return (x->value < y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
-inline
+inline static
 void* le(IntObj* x, IntObj *y) {
     return (x->value <= y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
-inline
+inline static
 void* gt(IntObj* x, IntObj *y) {
     return (x->value > y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
-inline
+inline static
 void* ge(IntObj* x, IntObj *y) {
     return (x->value >= y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
-inline
+inline static
 ArrayObj* make_array_obj(IntObj *length, void* init) {
     ArrayObj* o = halloc(sizeof(ArrayObj) + length->value * sizeof(void *));
 
@@ -336,7 +338,7 @@ ArrayObj* make_array_obj(IntObj *length, void* init) {
     return o;
 }
 
-inline
+inline static
 ObjectObj* make_object_obj(int64_t type, ObjectObj *parent, int num_slots) {
     ObjectObj* o = halloc(sizeof(ObjectObj) + num_slots * sizeof(void *));
     o->type = type;
@@ -344,19 +346,19 @@ ObjectObj* make_object_obj(int64_t type, ObjectObj *parent, int num_slots) {
     return o;
 }
 
-inline
+inline static
 IntObj* array_length(ArrayObj* a) {
     return make_int_obj(a->length);
 }
 
-inline
+inline static
 NullObj* array_set(ArrayObj* a, IntObj* i, void* v) {
     int64_t index = i->value;
     a->slots[index] = v;
     return make_null_obj();
 }
 
-inline
+inline static
 void* array_get(ArrayObj* a, IntObj* i) {
     return a->slots[i->value];
 }
@@ -592,7 +594,7 @@ void interpret_bc(Program* p) {
                     if (*p != '~')
                         printf("%c", *p);
                     else
-                        printf("%d", res[--cur]);
+                        printf("%lld", res[--cur]);
                 }
                 push(make_null_obj());
 
