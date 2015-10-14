@@ -268,13 +268,18 @@ int64_t obj_type(NullObj* o) {
 }
 
 inline static
-IntObj* make_int_obj() {
-	return halloc(sizeof(IntObj));
+IntObj* make_int_obj(int64_t value) {
+    IntObj* o = halloc(sizeof(IntObj));
+    o->type = Int;
+    o->value = value;
+    return o;
 }
 
 inline static
 NullObj* make_null_obj() {
-	return halloc(sizeof(NullObj));
+	NullObj* o = halloc(sizeof(NullObj));
+    o->type = Null;
+    return o;
 }
 
 inline static
