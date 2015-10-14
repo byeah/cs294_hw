@@ -10,6 +10,8 @@
 #define inline __inline
 #endif
 
+#define DEBUG
+
 // hashtable.h
 
 
@@ -546,10 +548,15 @@ void* peek() {
 
 void interpret_bc(Program* p) {
     vm_init(p);
-    //printf("Interpreting Bytecode Program:\n");
-    //print_prog(p);
+#ifdef DEBUG
+    printf("Interpreting Bytecode Program:\n");
+    print_prog(p);
+#endif
     while (sp->pc < sp->code->size) {
         ByteIns* ins = vector_get(sp->code, sp->pc);
+#ifdef DEBUG
+        printf("Interpreting OPCode: %d\n", ins->tag);
+#endif
         switch (ins->tag)
         {
             case LIT_OP: {
