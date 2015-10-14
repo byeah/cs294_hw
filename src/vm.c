@@ -555,7 +555,9 @@ void interpret_bc(Program* p) {
     while (sp->pc < sp->code->size) {
         ByteIns* ins = vector_get(sp->code, sp->pc);
 #ifdef DEBUG
-        printf("Interpreting OPCode: %d\n", ins->tag);
+        printf("Interpreting: ");
+        print_ins(ins);
+        printf("\n");
 #endif
         switch (ins->tag)
         {
