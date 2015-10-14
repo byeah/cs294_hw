@@ -219,16 +219,16 @@ typedef struct {
 	void* slots[0];
 } ArrayObj;
 
-typedef struct {
+typedef struct object_t {
 	int64_t type;
-	ClassObj* parent;
+    struct object_t* parent;
 	void* varslots[0];
-} ClassObj;
+} ObjectObj;
 
 static struct {
 	void* head;
-	int used;
-	int total;
+    int64_t used;
+    int64_t total;
 } heap;
 
 inline static init_heap() {
@@ -245,7 +245,7 @@ inline static
 void garbage_collector() {}
 
 inline static
-void* halloc(int nbytes) {
+void* halloc(int64_t nbytes) {
 	if (heap.used + nbytes > heap.total)
 		garbage_collector();
 
@@ -300,27 +300,27 @@ IntObj* modulo(IntObj* x, IntObj *y) {
 
 inline
 void* eq(IntObj* x, IntObj *y) {
-    return (x->value == y->value) ? make_int_obj(0) : make_null_obj();
+    return (x->value == y->value) ? (void *) make_int_obj(0) : (void *) make_null_obj();
 }
 
 inline
 void* lt(IntObj* x, IntObj *y) {
-    return (x->value < y->value) ? make_int_obj(0) : make_null_obj();
+    return (x->value < y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
 inline
 void* le(IntObj* x, IntObj *y) {
-    return (x->value <= y->value) ? make_int_obj(0) : make_null_obj();
+    return (x->value <= y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
 inline
 void* gt(IntObj* x, IntObj *y) {
-    return (x->value > y->value) ? make_int_obj(0) : make_null_obj();
+    return (x->value > y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
 inline
 void* ge(IntObj* x, IntObj *y) {
-    return (x->value >= y->value) ? make_int_obj(0) : make_null_obj();
+    return (x->value >= y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
 }
 
 inline
@@ -337,8 +337,8 @@ ArrayObj* make_array_obj(IntObj *length, void* init) {
 }
 
 inline
-ClassObj* make_class_obj(int64_t type, ClassObj *parent, int num_slots) {
-    ClassObj* o = halloc(sizeof(ClassObj) + num_slots * sizeof(void *));
+ObjectObj* make_object_obj(int64_t type, ObjectObj *parent, int num_slots) {
+    ObjectObj* o = halloc(sizeof(ObjectObj) + num_slots * sizeof(void *));
     o->type = type;
     o->parent = parent;
     return o;
@@ -351,7 +351,7 @@ IntObj* array_length(ArrayObj* a) {
 
 inline
 NullObj* array_set(ArrayObj* a, IntObj* i, void* v) {
-    int index = i->value;
+    int64_t index = i->value;
     a->slots[index] = v;
     return make_null_obj();
 }
@@ -388,7 +388,7 @@ typedef struct frame_t {
 
 static unsigned char stack[1024 * 1024];
 static Frame* sp = NULL;
-static Frame* next_sp = stack;
+static Frame* next_sp = (Frame *) stack;
 
 static Hashtable* global_func_name = NULL;
 static Hashtable* global_var_name = NULL;
@@ -399,8 +399,6 @@ static int operand_size = 0;
 
 static void* global_var[1024];
 
-
-
 static inline
 void push_frame(Vector* code, int pc, int num_slots) {
     next_sp->parent = sp;
@@ -408,7 +406,7 @@ void push_frame(Vector* code, int pc, int num_slots) {
     next_sp->pc = pc;
 
     sp = next_sp;
-    next_sp = (unsigned char *)next_sp + sizeof(Frame) + num_slots * sizeof(void *);
+    next_sp = (Frame *)((unsigned char *) next_sp + sizeof(Frame) + num_slots * sizeof(void *));
 }
 
 static inline
@@ -428,6 +426,37 @@ void assert(int criteria, char *msg) {
 #endif
 }
 
+static 
+int find_slot_index(ClassValue* cvalue, int name) {
+    int slot_cnt = 0;
+
+    for (int i = 0; i < cvalue->slots->size; ++i) {
+        Value* value = vector_get(cvalue->slots, i);
+        
+        if (value->tag == SLOT_VAL) {
+            SlotValue *sval = (SlotValue *)value;
+            if (sval->name == name)
+                return slot_cnt;
+            ++slot_cnt;
+        }
+    }
+
+    return -1;
+}
+
+static
+MethodValue* find_method(ClassValue* cvalue, int name) {
+    for (int i = 0; i < cvalue->slots->size; ++i) {
+        Value* value = vector_get(cvalue->slots, i);
+        if (value->tag == METHOD_VAL) {
+            MethodValue *mval = (MethodValue *)value;
+            if (mval->name == name)
+                return mval;
+        }
+    }
+    return NULL;
+}
+
 static inline
 void vm_init(Program* p) {
     // init heap
@@ -441,9 +470,7 @@ void vm_init(Program* p) {
     MethodValue* entry_func = vector_get(p->values, p->entry);
     push_frame(entry_func->code, 0, entry_func->nargs + entry_func->nlocals);
     
-
     // init global
-
     int global_var_cnt = 0;
     for (int i = 0; i < p->slots->size; ++i) {
         int index = (int)vector_get(p->slots, i);
@@ -548,7 +575,7 @@ void interpret_bc(Program* p) {
             }
             case PRINTF_OP: {
                 PrintfIns* printf_ins = (PrintfIns *)ins;
-                int* res = malloc(sizeof(int) * (printf_ins->arity));
+                int64_t* res = malloc(sizeof(int64_t) * (printf_ins->arity));
 
                 for (int i = 0; i < printf_ins->arity; i++) {
                     IntObj* obj = pop();
@@ -574,6 +601,9 @@ void interpret_bc(Program* p) {
             }
             case OBJECT_OP: {
                 ObjectIns* obj_ins = (ObjectIns*)ins;
+                
+                int64_t class_type = obj_ins->class + 3;
+
                 ClassValue* class = vector_get(p->values, obj_ins->class);
 
                 int slot_count = 0;
@@ -588,146 +618,161 @@ void interpret_bc(Program* p) {
                     args[i] = pop();
                 }
 
-                ClassObj* parent = args[slot_count];
-                //TODO!!
+                ObjectObj* parent = args[slot_count];
+                ObjectObj* obj = make_object_obj(class_type, parent, slot_count);
 
                 int cnt = 0;
                 for (int i = 0; i < class->slots->size; i++) {
                     Value* v = vector_get(p->values, (int)vector_get(class->slots, i));
                     if (v->tag == METHOD_VAL) {
-                        MethodValue* method_val = (MethodValue *)v;
-                        StringValue *name = vector_get(p->values, method_val->name);
-                        assert(name->tag == STRING_VAL, "Invalid object type.\n");
-                        MethodObj* method_obj = make_method_obj(method_val);
-                        add_entry(obj, name->value, method_obj);
+
                     }
-                    else
-                        if (v->tag == SLOT_VAL) {
-                            SlotValue* slot_val = (SlotValue *)v;
-                            StringValue *name = vector_get(p->values, slot_val->name);
-                            assert(name->tag == STRING_VAL, "Invalid object type.\n");
-                            add_entry(obj, name->value, (void*)args[slot_count - 1 - cnt]);
-                            cnt++;
-                        }
+                    else if (v->tag == SLOT_VAL) {
+                        obj->varslots[cnt] = args[slot_count - 1 - cnt];
+                        ++cnt;
+                    }
                 }
-                push((Obj*)obj);
+
+                push(obj);
 
                 free(args);
 
-                //printf("   object #%d", i->class);
                 break;
             }
             case SLOT_OP: {
                 SlotIns* slot_ins = (SlotIns*)ins;
-                EnvObj* obj = pop();
-                assert(obj->type == Env, "Get slot should be with an object!");
-                StringValue *name = vector_get(p->values, slot_ins->name);
-                assert(name->tag == STRING_VAL, "Invalid string type for SLOT_OP.\n");
-                //                push(((SlotObj*)get_entry(obj, name->value))->slot);
-                push(get_entry(obj, name->value));
+
+                ObjectObj* obj = pop();
+                assert(obj->type > 2, "Get slot should be with an object!");
+                
+                //StringValue *name = vector_get(p->values, slot_ins->name);
+                //assert(name->tag == STRING_VAL, "Invalid string type for SLOT_OP.\n");
+                
+                ClassValue* class = vector_get(p->values, obj->type - 3);
+
+                int idx = find_slot_index(class, slot_ins->name);
+                assert(idx >= 0, "Could not find the slot by name.\n");
+
+                push(obj->varslots[idx]);
+
                 break;
             }
             case SET_SLOT_OP: {
                 SetSlotIns* set_slot_ins = (SetSlotIns*)ins;
-                Obj* value = pop();
-                EnvObj* obj = pop();
-                assert(obj->type == Env, "Get slot should be with an object!");
-                StringValue *name = vector_get(p->values, set_slot_ins->name);
-                assert(name->tag == STRING_VAL, "Invalid string type for SET_SLOT_OP.\n");
-                add_entry(obj, name->value, value);
-                //                ((SlotObj*)get_entry(obj, name->value))->slot = value;
+
+                void* value = pop();
+                ObjectObj* obj = pop();
+                assert(obj->type > 2, "Get slot should be with an object!");
+
+                //StringValue *name = vector_get(p->values, set_slot_ins->name);
+                //assert(name->tag == STRING_VAL, "Invalid string type for SET_SLOT_OP.\n");
+                
+                ClassValue* class = vector_get(p->values, obj->type - 3);
+
+                int idx = find_slot_index(class, set_slot_ins->name);
+                assert(idx >= 0, "Could not find the slot by name.\n");
+
+                obj->varslots[idx] = value;
                 push(value);
+
                 break;
             }
             case CALL_SLOT_OP: {
                 CallSlotIns* call_slot = (CallSlotIns*)ins;
-                Obj** args = malloc(sizeof(Obj *) * (call_slot->arity));
+                void** args = malloc(sizeof(void *) * (call_slot->arity));
+                
                 for (int i = 0; i < call_slot->arity; i++) {
                     args[i] = pop();
                 }
-                Obj* receiver = args[call_slot->arity - 1];
+                
+                NullObj* receiver = args[call_slot->arity - 1];
+
                 StringValue *name = vector_get(p->values, call_slot->name);
+                
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
                 //printf("%d\n",receiver->type);
+                
                 switch (receiver->type) {
                     case Int: {
-                        IntObj* iobj = (IntObj*)receiver;
+                        IntObj* iobj = (IntObj*) receiver;
+
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
-                        Obj* para = args[0];
-                        if (para->type != Int) {
+                        
+                        IntObj* ipara = args[0];
+                        if (ipara->type != Int) {
                             printf("Error: Operand %s to Int must be Int.\n", name->value);
                             exit(-1);
                         }
-                        IntObj* ipara = (IntObj*)para;
 
                         if (strcmp(name->value, "add") == 0)
-                            push((Obj*)add(iobj, ipara)); else
-                            if (strcmp(name->value, "sub") == 0)
-                            push((Obj*)subtract(iobj, ipara)); else
-                            if (strcmp(name->value, "mul") == 0)
-                            push((Obj*)multiply(iobj, ipara)); else
-                            if (strcmp(name->value, "div") == 0)
-                            push((Obj*)divide(iobj, ipara)); else
-                            if (strcmp(name->value, "mod") == 0)
-                            push((Obj*)modulo(iobj, ipara)); else
-                            if (strcmp(name->value, "lt") == 0)
-                            push((Obj*)lt(iobj, ipara)); else
-                            if (strcmp(name->value, "gt") == 0)
-                            push((Obj*)gt(iobj, ipara)); else
-                            if (strcmp(name->value, "le") == 0)
-                            push((Obj*)le(iobj, ipara)); else
-                            if (strcmp(name->value, "ge") == 0)
-                            push((Obj*)ge(iobj, ipara)); else
-                            if (strcmp(name->value, "eq") == 0)
-                            push((Obj*)eq(iobj, ipara));
-                            else
-                                printf("Error: Operator %s not recognized.\n", name->value);
+                            push(add(iobj, ipara)); 
+                        else if (strcmp(name->value, "sub") == 0)
+                            push(subtract(iobj, ipara)); 
+                        else if (strcmp(name->value, "mul") == 0)
+                            push(multiply(iobj, ipara)); 
+                        else if (strcmp(name->value, "div") == 0)
+                            push(divide(iobj, ipara)); 
+                        else if (strcmp(name->value, "mod") == 0)
+                            push(modulo(iobj, ipara)); 
+                        else if (strcmp(name->value, "lt") == 0)
+                            push(lt(iobj, ipara)); 
+                        else if (strcmp(name->value, "gt") == 0)
+                            push(gt(iobj, ipara)); 
+                        else if (strcmp(name->value, "le") == 0)
+                            push(le(iobj, ipara)); 
+                        else if (strcmp(name->value, "ge") == 0)
+                            push(ge(iobj, ipara)); 
+                        else if (strcmp(name->value, "eq") == 0)
+                            push(eq(iobj, ipara));
+                        else
+                            printf("Error: Operator %s not recognized.\n", name->value);
+
                         break;
                     }
 
                     case Array: {
-                        ArrayObj* aobj = (ArrayObj*)receiver;
+                        ArrayObj* aobj = (ArrayObj*) receiver;
+
                         if (strcmp(name->value, "length") == 0)
-                            push(array_length(aobj)); else
-                            if (strcmp(name->value, "set") == 0) {
-                                IntObj* index = (IntObj*)args[1];
-                                array_set(aobj, index, args[0]);
-                                push(make_null_obj());
-                            }
-                            else {
-                                if (strcmp(name->value, "get") == 0) {
-                                    push(array_get(aobj, (IntObj*)args[0]));
-                                }
-                                else {
-                                    printf("Error: Operator %s not recognized.\n", name->value);
-                                    exit(-1);
-                                }
-                            }
-                        break;
-                    }
-
-                    case Env: {
-                        EnvObj* env = (EnvObj*)receiver;
-                        StringValue *name = vector_get(p->values, call_slot->name);
-                        assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
-
-                        MethodObj *method_obj = get_entry(env, name->value);
-                        assert(method_obj && obj_type((Obj*)method_obj) == Method, "Invalid method type for CALL_OP.\n");
-                        
-                        //Frame* new_frame = make_frame(local_frame, code, pc,
-                        //    method_obj->method->nargs + method_obj->method->nlocals + 1);
-                        
-                        push_frame(method_obj->method->code, -1, method_obj->method->nargs + method_obj->method->nlocals + 1);
-                      
-                        vector_set(stackframes[frame_idx].slots, 0, env);
-                        for (int i = 0; i < call_slot->arity - 1; i++) {
-                            vector_set(stackframes[frame_idx].slots, i + 1, args[call_slot->arity - 2 - i]);
+                            push(array_length(aobj)); 
+                        else if (strcmp(name->value, "set") == 0) {
+                            IntObj* index = (IntObj*) args[1];
+                            array_set(aobj, index, args[0]);
+                            push(make_null_obj());
+                        } else if (strcmp(name->value, "get") == 0) {
+                            push(array_get(aobj, (IntObj*)args[0]));
+                        } else {
+                            printf("Error: Operator %s not recognized.\n", name->value);
+                            exit(-1);
                         }
                         break;
                     }
-                    default:
+
+                    case Null: {
                         printf("Error: Calling %s from a NULL reference.\n", name->value);
                         exit(-1);
+                    }
+
+                    default: {
+                        ObjectObj* oobj = (ObjectObj *) receiver;
+
+                        //StringValue *name = vector_get(p->values, call_slot->name);
+                        //assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
+
+                        ClassValue* class = vector_get(p->values, oobj->type - 3);
+
+                        MethodValue* method = find_method(class, call_slot->name);
+                        assert(method && method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
+                        
+                        push_frame(method->code, -1, method->nargs + method->nlocals + 1);
+                      
+                        sp->slots[0] = oobj;
+
+                        for (int i = 1; i < call_slot->arity; i++) {
+                            sp->slots[i] = args[call_slot->arity - 1 - i];
+                        }
+                        break;
+                    }
                 }
                 break;
             }
