@@ -667,9 +667,13 @@ void interpret_bc(Program* p) {
                 //StringValue *name = vector_get(p->values, slot_ins->name);
                 //assert(name->tag == STRING_VAL, "Invalid string type for SLOT_OP.\n");
                 
-                ClassValue* class = vector_get(p->values, obj->type - 3);
+                int idx = -1;
 
-                int idx = find_slot_index(p->values, class, slot_ins->name);
+                for (ObjectObj* obj_for_search = obj; obj_for_search != NULL && idx == -1; obj_for_search = obj_for_search->parent) {
+                    ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
+                    idx = find_slot_index(p->values, class, slot_ins->name);
+                }
+
                 assert(idx >= 0, "Could not find the slot by name.\n");
 
                 push(obj->varslots[idx]);
@@ -686,9 +690,13 @@ void interpret_bc(Program* p) {
                 //StringValue *name = vector_get(p->values, set_slot_ins->name);
                 //assert(name->tag == STRING_VAL, "Invalid string type for SET_SLOT_OP.\n");
                 
-                ClassValue* class = vector_get(p->values, obj->type - 3);
+                int idx = -1;
 
-                int idx = find_slot_index(p->values, class, set_slot_ins->name);
+                for (ObjectObj* obj_for_search = obj; obj_for_search != NULL && idx == -1; obj_for_search = obj_for_search->parent) {
+                    ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
+                    idx = find_slot_index(p->values, class, set_slot_ins->name);
+                }
+
                 assert(idx >= 0, "Could not find the slot by name.\n");
 
                 obj->varslots[idx] = value;
@@ -708,7 +716,7 @@ void interpret_bc(Program* p) {
 
                 StringValue *name = vector_get(p->values, call_slot->name);
                 
-                assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
+                assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
                 
                 switch (receiver->type) {
                     case Int: {
@@ -777,10 +785,16 @@ void interpret_bc(Program* p) {
                         //StringValue *name = vector_get(p->values, call_slot->name);
                         //assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
 
-                        ClassValue* class = vector_get(p->values, oobj->type - 3);
+                        MethodValue* method = NULL;
 
-                        MethodValue* method = find_method(p->values, class, call_slot->name);
-                        assert(method && method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
+                        for (ObjectObj* obj_for_search = oobj; obj_for_search != NULL && method == NULL; obj_for_search = obj_for_search->parent) {
+                            ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
+                            method = find_method(p->values, class, call_slot->name);
+                        }
+
+                        assert(method != NULL, "Could not find method for CALL_SLOT_OP.\n");
+                        assert(method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
+
                         assert(call_slot->arity == method->nargs + method->nlocals + 1, "n should equals to num_slots + 1\n");
 
                         push_frame(method->code, -1, method->nargs + method->nlocals + 1);
