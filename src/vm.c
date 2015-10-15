@@ -10,7 +10,7 @@
 #define inline __inline
 #endif
 
-#define DEBUG
+//#define DEBUG
 
 // hashtable.h
 
@@ -436,11 +436,12 @@ void assert(int criteria, char *msg) {
 }
 
 static 
-int find_slot_index(ClassValue* cvalue, int name) {
+int find_slot_index(Vector *values, ClassValue* cvalue, int name) {
     int slot_cnt = 0;
 
     for (int i = 0; i < cvalue->slots->size; ++i) {
-        Value* value = vector_get(cvalue->slots, i);
+        int value_index = (int)vector_get(cvalue->slots, i);
+        Value *value = vector_get(values, value_index);
         
         if (value->tag == SLOT_VAL) {
             SlotValue *sval = (SlotValue *)value;
@@ -454,9 +455,11 @@ int find_slot_index(ClassValue* cvalue, int name) {
 }
 
 static
-MethodValue* find_method(ClassValue* cvalue, int name) {
+MethodValue* find_method(Vector *values, ClassValue* cvalue, int name) {
     for (int i = 0; i < cvalue->slots->size; ++i) {
-        Value* value = vector_get(cvalue->slots, i);
+        int value_index = (int) vector_get(cvalue->slots, i);
+        Value *value = vector_get(values, value_index);
+
         if (value->tag == METHOD_VAL) {
             MethodValue *mval = (MethodValue *)value;
             if (mval->name == name)
@@ -666,7 +669,7 @@ void interpret_bc(Program* p) {
                 
                 ClassValue* class = vector_get(p->values, obj->type - 3);
 
-                int idx = find_slot_index(class, slot_ins->name);
+                int idx = find_slot_index(p->values, class, slot_ins->name);
                 assert(idx >= 0, "Could not find the slot by name.\n");
 
                 push(obj->varslots[idx]);
@@ -685,7 +688,7 @@ void interpret_bc(Program* p) {
                 
                 ClassValue* class = vector_get(p->values, obj->type - 3);
 
-                int idx = find_slot_index(class, set_slot_ins->name);
+                int idx = find_slot_index(p->values, class, set_slot_ins->name);
                 assert(idx >= 0, "Could not find the slot by name.\n");
 
                 obj->varslots[idx] = value;
@@ -776,7 +779,7 @@ void interpret_bc(Program* p) {
 
                         ClassValue* class = vector_get(p->values, oobj->type - 3);
 
-                        MethodValue* method = find_method(class, call_slot->name);
+                        MethodValue* method = find_method(p->values, class, call_slot->name);
                         assert(method && method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
                         assert(call_slot->arity == method->nargs + method->nlocals + 1, "n should equals to num_slots + 1\n");
 
