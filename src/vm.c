@@ -257,14 +257,10 @@ void* halloc(int64_t nbytes) {
 		fprintf(stderr, "out of memory.\n");
 		exit(1);
 	}
+
 	void *p = (unsigned char *)heap.head + heap.used;
 	heap.used += nbytes;
 	return p;
-}
-
-inline static
-int64_t obj_type(NullObj* o) {
-    return o->type;
 }
 
 inline static
@@ -395,18 +391,22 @@ typedef struct frame_t {
     void* slots[0];
 } Frame;
 
-static unsigned char stack[1024 * 1024];
 static Frame* sp = NULL;
-static Frame* next_sp = (Frame *) stack;
+static Frame* next_sp = NULL;
 
 static Hashtable* global_func_name = NULL;
 static Hashtable* global_var_name = NULL;
 static Hashtable* labels = NULL;
 
-static void* operand[1024];
+static void* operand[128] = { NULL };
 static int operand_size = 0;
 
-static void* global_var[1024];
+static void* global_var[128] = { NULL };
+
+static 
+void init_stack() {
+	next_sp = malloc(1024 * 1024);
+}
 
 static inline
 void push_frame(Vector* code, int pc, int num_slots) {
@@ -471,8 +471,9 @@ MethodValue* find_method(Vector *values, ClassValue* cvalue, int name) {
 
 static inline
 void vm_init(Program* p) {
-    // init heap
+    // init heap and stack
     init_heap();
+	init_stack();
 
     // init global symbol tables
     global_func_name = ht_create(13);
@@ -566,7 +567,9 @@ void interpret_bc(Program* p) {
 #ifdef DEBUG
         printf("Interpreting: ");
         print_ins(ins);
-        printf("\n");
+		//if (global_var[0]) printf(",  type: %lld, operand: %d", ((NullObj *)global_var[0])->type, operand_size);
+		printf(", operand: %d", operand_size);
+		printf("\n");
 #endif
         switch (ins->tag)
         {
@@ -719,7 +722,7 @@ void interpret_bc(Program* p) {
                 
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
                 
-                printf("CALL_SLOT_OP receiver type: %d\n", receiver->type);
+                //printf("CALL_SLOT_OP receiver type: %lld\n", receiver->type);
 
                 switch (receiver->type) {
                     case Int: {
@@ -766,8 +769,7 @@ void interpret_bc(Program* p) {
                             push(array_length(aobj)); 
                         else if (strcmp(name->value, "set") == 0) {
                             IntObj* index = (IntObj*) args[1];
-                            array_set(aobj, index, args[0]);
-                            push(make_null_obj());
+                            push(array_set(aobj, index, args[0]));
                         } else if (strcmp(name->value, "get") == 0) {
                             push(array_get(aobj, (IntObj*)args[0]));
                         } else {
@@ -829,7 +831,7 @@ void interpret_bc(Program* p) {
                 int var_idx = ht_get(global_var_name, name->value);
                 global_var[var_idx] = peek();
                 
-                printf("SET_GLOBAL_OP index: %d, type: %d\n", var_idx, ((NullObj *)global_var[var_idx])->type);
+                //printf("SET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
 
                 break;
             }
@@ -841,7 +843,7 @@ void interpret_bc(Program* p) {
                 int var_idx = ht_get(global_var_name, name->value);
                 push(global_var[var_idx]);
 
-                printf("GET_GLOBAL_OP index: %d, type: %d\n", var_idx, ((NullObj *)global_var[var_idx])->type);
+                //printf("GET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
 
                 break;
             }
@@ -900,8 +902,6 @@ void interpret_bc(Program* p) {
 
                 push_frame(method_val->code, -1, method_val->nargs + method_val->nlocals);
 
-
-
                 for (int i = 0; i < call_ins->arity; i++) {
                     sp->slots[i] = args[call_ins->arity - 1 - i];
                 }
@@ -910,6 +910,7 @@ void interpret_bc(Program* p) {
                 break;
             }
             case RETURN_OP: {
+				assert(operand_size == 1, "Operand stack should contain only one element when return is called.\n");
                 pop_frame();
 
                 if (sp == NULL){
