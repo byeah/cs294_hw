@@ -706,7 +706,6 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, call_slot->name);
                 
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
-                //printf("%d\n",receiver->type);
                 
                 switch (receiver->type) {
                     case Int: {
@@ -779,17 +778,17 @@ void interpret_bc(Program* p) {
 
                         MethodValue* method = find_method(class, call_slot->name);
                         assert(method && method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
-                        
-                        push_frame(method->code, -1, method->nargs + method->nlocals + 1);
-                      
-                        sp->slots[0] = oobj;
+                        assert(call_slot->arity == method->nargs + method->nlocals + 1, "n should equals to num_slots + 1\n");
 
-                        for (int i = 1; i < call_slot->arity; i++) {
+                        push_frame(method->code, -1, method->nargs + method->nlocals + 1);
+                        
+                        for (int i = 0; i < call_slot->arity; i++) {
                             sp->slots[i] = args[call_slot->arity - 1 - i];
                         }
                         break;
                     }
                 }
+                free(args);
                 break;
             }
             case SET_LOCAL_OP: {
