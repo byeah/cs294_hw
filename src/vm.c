@@ -206,9 +206,18 @@ typedef enum {
 } ObjType;
 
 typedef struct {
+	int64_t type;
+} Obj;
+
+typedef struct {
     int64_t type;
 	int64_t value;
 } IntObj;
+
+typedef struct {
+	int64_t type;
+	void* forward;
+} BrokenHeartObj;
 
 typedef struct {
 	int64_t type;
@@ -221,32 +230,189 @@ typedef struct {
 	void* slots[0];
 } ArrayObj;
 
-typedef struct object_t {
+typedef struct {
 	int64_t type;
-    struct object_t* parent;
+    void* parent;
 	void* varslots[0];
 } ObjectObj;
 
 static struct {
-	void* head;
+	char* head;
     int64_t used;
     int64_t total;
-} heap;
+} heap, freespace;
 
 inline static 
 void init_heap() {
 	heap.head = malloc(1024 * 1024);
 	heap.used = 0;
 	heap.total = 1024 * 1024;
+	freespace.head = malloc(1024 * 1024);
+	freespace.used = 0;
+	freespace.total = 1024 * 1024;
+}
+
+typedef struct frame_t {
+	struct frame_t *parent;
+	Vector* code;
+	int64_t pc;
+	void* slots[0];
+} Frame;
+
+static unsigned char *stack[1024 * 1024];
+static Frame* sp = NULL;
+static Frame* next_sp = (Frame *)stack;
+
+static Hashtable* global_func_name = NULL;
+static Hashtable* global_var_name = NULL;
+static Hashtable* labels = NULL;
+
+static void* operand[1024 * 1024] = { NULL };
+static int operand_count = 0;
+
+static void* global_var[128] = { NULL };
+static int global_var_count = 0;
+
+typedef struct {
+	int type;
+	int varslot_count;
+} ClassInfo;
+
+static ClassInfo class_table[1024];
+static int class_table_count = 0;
+
+static inline
+void assert(int criteria, char *msg) {
+#ifdef DEBUG
+	if (!criteria) {
+		fprintf(stderr, msg);
+		exit(1);
+	}
+#endif
 }
 
 inline static 
 void free_heap() {
 	free(heap.head);
+	free(freespace.head);
 }
 
 inline static
-void garbage_collector() {}
+Obj* get_post_gc_ptr(Obj *obj) {
+	// already copied?
+	if (obj->type == -1) {
+		return ((BrokenHeartObj *)obj)->forward;
+	}
+
+	// calculate size
+	int64_t size = -1;
+	if (obj->type == Int || obj->type == Null) {
+		size = sizeof(IntObj);
+	}
+	else if (obj->type == Array) {
+		size = sizeof(ArrayObj) + ((ArrayObj *)obj)->length * sizeof(void *);
+	}
+	else {
+		int numslots = -1;
+		for (int i = 0; i < class_table_count; ++i) {
+			if (class_table[i].type == obj->type) {
+				numslots = class_table[i].varslot_count;
+				break;
+			}
+		}
+		assert(numslots != -1, "Class not found.\n");
+		size = sizeof(ObjectObj) + numslots * sizeof(void *);
+	}
+
+	// copy
+	Obj* ret = (Obj *)(freespace.head + freespace.used);
+	memcpy(ret, obj, size);
+	freespace.used += size;
+
+	// broken heart
+	((BrokenHeartObj *)obj)->type = -1;
+	((BrokenHeartObj *)obj)->forward = ret;
+
+	return ret;
+}
+
+inline static
+void scan_root_set() {
+	// global variables
+	for (int i = 0; i < global_var_count; ++i) {
+		Obj* o = global_var[i];
+		if (o) {
+			Obj* post_gc_o = get_post_gc_ptr(o);
+			global_var[i] = post_gc_o;
+		}
+	}
+	// operand stack
+	for (int i = 0; i < operand_count; ++i) {
+		Obj* o = operand[i];
+		Obj* post_gc_o = get_post_gc_ptr(o);
+		operand[i] = post_gc_o;
+	}
+	// local frames
+	for (Frame *p = sp, *np = next_sp; p != NULL; np = p, p = p->parent) {
+		for (void **cur = p->slots; (void *) cur < (void *) np; ++cur) {
+			Obj* o = *cur;
+			Obj* post_gc_o = get_post_gc_ptr(o);
+			*cur = post_gc_o;
+		}
+	}
+}
+
+inline static
+void garbage_collector() {
+	// root set
+	scan_root_set();
+
+	// free space
+	for (Obj *p = (Obj *)freespace.head; (Obj *) p < (Obj *) (freespace.head + freespace.used); ) {
+		if (p->type == Int || p->type == Null) {
+			p += 2;
+		}
+		else if (p->type == Array) {
+			ArrayObj *arr_p = (ArrayObj *)p;
+			for (int i = 0; i < arr_p->length; ++i) {
+				Obj* post_gc_o = get_post_gc_ptr(arr_p->slots[i]);
+				arr_p->slots[i] = post_gc_o;
+			}
+			p += (2 + arr_p->length);
+		}
+		else if (p->type > 2) {
+			ObjectObj *obj_p = (ObjectObj *)p;
+			int numslots = -1;
+			for (int i = 0; i < class_table_count; ++i) {
+				if (class_table[i].type == p->type) {
+					numslots = class_table[i].varslot_count;
+					break;
+				}
+			}
+			assert(numslots != -1, "Class not found.\n");
+			for (int i = 0; i < numslots; ++i) {
+				Obj* post_gc_o = get_post_gc_ptr(obj_p->varslots[i]);
+				obj_p->varslots[i] = post_gc_o;
+			}
+			p += (2 + numslots);
+		}
+		else {
+			printf("Unrecognized type: %lld.\n", p->type);
+			exit(1);
+		}
+	}
+
+	void *tmp = heap.head;
+	int64_t tmp_size = heap.total;
+	
+	heap.head = freespace.head;
+	heap.total = freespace.total;
+	heap.used = freespace.used;
+	
+	freespace.head = tmp;
+	freespace.used = 0;
+	freespace.total = tmp_size;
+}
 
 inline static
 void* halloc(int64_t nbytes) {
@@ -258,7 +424,7 @@ void* halloc(int64_t nbytes) {
 		exit(1);
 	}
 
-	void *p = (unsigned char *)heap.head + heap.used;
+	void *p = heap.head + heap.used;
 	heap.used += nbytes;
 	return p;
 }
@@ -384,30 +550,6 @@ void free_label(LabelAddr* label) {
     free(label);
 }
 
-typedef struct frame_t {
-    struct frame_t *parent;
-    Vector* code;
-    int64_t pc;
-    void* slots[0];
-} Frame;
-
-static Frame* sp = NULL;
-static Frame* next_sp = NULL;
-
-static Hashtable* global_func_name = NULL;
-static Hashtable* global_var_name = NULL;
-static Hashtable* labels = NULL;
-
-static void* operand[128] = { NULL };
-static int operand_size = 0;
-
-static void* global_var[128] = { NULL };
-
-static 
-void init_stack() {
-	next_sp = malloc(1024 * 1024);
-}
-
 static inline
 void push_frame(Vector* code, int pc, int num_slots) {
     next_sp->parent = sp;
@@ -422,17 +564,6 @@ static inline
 void pop_frame() {
     next_sp = sp;
     sp = sp->parent;
-}
-
-
-static inline
-void assert(int criteria, char *msg) {
-#ifdef DEBUG
-    if (!criteria) {
-        fprintf(stderr, msg);
-        exit(1);
-    }
-#endif
 }
 
 static 
@@ -473,7 +604,6 @@ static inline
 void vm_init(Program* p) {
     // init heap and stack
     init_heap();
-	init_stack();
 
     // init global symbol tables
     global_func_name = ht_create(13);
@@ -484,7 +614,6 @@ void vm_init(Program* p) {
     push_frame(entry_func->code, 0, entry_func->nargs + entry_func->nlocals);
     
     // init global
-    int global_var_cnt = 0;
     for (int i = 0; i < p->slots->size; ++i) {
         int index = (int)vector_get(p->slots, i);
         Value* value = vector_get(p->values, index);
@@ -503,7 +632,7 @@ void vm_init(Program* p) {
                 StringValue *name = vector_get(p->values, slot_val->name);
                 assert(name->tag == STRING_VAL, "Invalid object type.\n");
 
-                ht_put(global_var_name, name->value, global_var_cnt++);
+                ht_put(global_var_name, name->value, (void *) (global_var_count++));
 
                 break;
             }
@@ -511,6 +640,26 @@ void vm_init(Program* p) {
                 assert(0, "Invalid value type.\n");
         }
     }
+
+	// init class info
+	for (int i = 0; i < p->values->size; ++i) {
+		Value* value = vector_get(p->values, i);
+		if (value->tag == CLASS_VAL) {
+			ClassValue *cval = (ClassValue *)value;
+
+			ClassInfo *info = &class_table[class_table_count++];
+			info->type = i + 3;
+
+			for (int j = 0; j < cval->slots->size; ++j) {
+				int index = (int)vector_get(cval->slots, j);
+				Value *slot = vector_get(p->values, index);
+
+				if (value->tag == SLOT_VAL) {
+					++(info->varslot_count);
+				}
+			}
+		}
+	}
 
     // preprocess labels
     labels = ht_create(13);
@@ -543,17 +692,17 @@ void vm_cleanup() {
 
 static inline
 void push(void* obj) {
-    operand[operand_size++] = obj;
+    operand[operand_count++] = obj;
 }
 
 static inline
 void* pop() {
-    return operand[--operand_size];
+    return operand[--operand_count];
 }
 
 static inline
 void* peek() {
-    return operand[operand_size - 1];
+    return operand[operand_count - 1];
 }
 
 void interpret_bc(Program* p) {
@@ -568,7 +717,7 @@ void interpret_bc(Program* p) {
         printf("Interpreting: ");
         print_ins(ins);
 		//if (global_var[0]) printf(",  type: %lld, operand: %d", ((NullObj *)global_var[0])->type, operand_size);
-		printf(", operand: %d", operand_size);
+		printf(", operand: %d", operand_count);
 		printf("\n");
 #endif
         switch (ins->tag)
@@ -828,7 +977,7 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, set_global_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid object type for SET_GLOBAL_OP.\n");
 
-                int var_idx = ht_get(global_var_name, name->value);
+                int var_idx = (int) ht_get(global_var_name, name->value);
                 global_var[var_idx] = peek();
                 
                 //printf("SET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
@@ -840,7 +989,7 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, get_global_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid object type for GET_GLOBAL_OP.\n");
 
-                int var_idx = ht_get(global_var_name, name->value);
+                int var_idx = (int) ht_get(global_var_name, name->value);
                 push(global_var[var_idx]);
 
                 //printf("GET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
@@ -910,7 +1059,7 @@ void interpret_bc(Program* p) {
                 break;
             }
             case RETURN_OP: {
-				assert(operand_size == 1, "Operand stack should contain only one element when return is called.\n");
+				assert(operand_count == 1, "Operand stack should contain only one element when return is called.\n");
                 pop_frame();
 
                 if (sp == NULL){
