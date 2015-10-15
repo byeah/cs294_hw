@@ -10,7 +10,7 @@
 #define inline __inline
 #endif
 
-//#define DEBUG
+#define DEBUG
 
 // hashtable.h
 
@@ -502,7 +502,7 @@ void vm_init(Program* p) {
                 StringValue *name = vector_get(p->values, slot_val->name);
                 assert(name->tag == STRING_VAL, "Invalid object type.\n");
 
-                ht_put(global_var_name, name->value, &global_var[global_var_cnt++]);
+                ht_put(global_var_name, name->value, global_var_cnt++);
 
                 break;
             }
@@ -537,6 +537,7 @@ void vm_cleanup() {
     ht_free(global_func_name, NULL);
     ht_free(global_var_name, NULL);
     ht_free(labels, free);
+    free_heap();
 }
 
 static inline
@@ -718,6 +719,8 @@ void interpret_bc(Program* p) {
                 
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
                 
+                printf("CALL_SLOT_OP receiver type: %d\n", receiver->type);
+
                 switch (receiver->type) {
                     case Int: {
                         IntObj* iobj = (IntObj*) receiver;
@@ -795,7 +798,7 @@ void interpret_bc(Program* p) {
                         assert(method != NULL, "Could not find method for CALL_SLOT_OP.\n");
                         assert(method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
 
-                        assert(call_slot->arity == method->nargs + method->nlocals + 1, "n should equals to num_slots + 1\n");
+                        assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
 
                         push_frame(method->code, -1, method->nargs + method->nlocals + 1);
                         
@@ -823,9 +826,11 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, set_global_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid object type for SET_GLOBAL_OP.\n");
 
-                void** global_var_slot = ht_get(global_var_name, name->value);
-                *global_var_slot = peek();
+                int var_idx = ht_get(global_var_name, name->value);
+                global_var[var_idx] = peek();
                 
+                printf("SET_GLOBAL_OP index: %d, type: %d\n", var_idx, ((NullObj *)global_var[var_idx])->type);
+
                 break;
             }
             case GET_GLOBAL_OP: {
@@ -833,8 +838,10 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, get_global_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid object type for GET_GLOBAL_OP.\n");
 
-                void** global_var_slot = ht_get(global_var_name, name->value);
-                push(*global_var_slot);
+                int var_idx = ht_get(global_var_name, name->value);
+                push(global_var[var_idx]);
+
+                printf("GET_GLOBAL_OP index: %d, type: %d\n", var_idx, ((NullObj *)global_var[var_idx])->type);
 
                 break;
             }
