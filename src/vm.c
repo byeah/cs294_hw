@@ -440,9 +440,9 @@ void garbage_collector() {
 
 inline static
 void* halloc(int64_t nbytes) {
-    //if (heap.used + nbytes > heap.total) {
+    if (heap.used + nbytes > heap.total) {
         garbage_collector();
-    //}
+    }
 
     if (heap.used + nbytes > heap.total) {
         fprintf(stderr, "Out of memory.\n");
