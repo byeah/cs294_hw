@@ -210,7 +210,7 @@ Program* read_program() {
 }
 
 Program* load_bytecode(char* filename) {
-    inputfile = fopen(filename, "r");
+    inputfile = fopen(filename, "rb");
     if (!inputfile) {
         printf("Could not read file %s.\n", filename);
         exit(-1);
