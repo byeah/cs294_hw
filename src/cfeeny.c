@@ -6,7 +6,7 @@
 #include "compiler.h"
 #include "vm.h"
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #ifdef WIN32
@@ -45,8 +45,8 @@ int main (int argc, char** argvs) {
   }
 
   //Read in AST
-  char* filename = argvs[1];
-  ScopeStmt* stmt = read_ast(filename);
+  //char* filename = argvs[1];
+  //ScopeStmt* stmt = read_ast(filename);
 
 #ifdef DEBUG
   TIME_T t1, t2;
@@ -57,7 +57,7 @@ int main (int argc, char** argvs) {
 #endif
 
   //Compile to bytecode
-  Program* program = compile(stmt);
+  //Program* program = compile(stmt);
 
 #ifdef DEBUG
   TIME(t2);
@@ -65,7 +65,8 @@ int main (int argc, char** argvs) {
 
   TIME(t1);
 #endif
-
+  //Read in bytecode
+  Program* program = load_bytecode(argvs[1]);
   //Interpret bytecode
   interpret_bc(program);
 
