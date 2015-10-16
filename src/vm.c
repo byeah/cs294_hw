@@ -10,7 +10,7 @@
 #define inline __inline
 #endif
 
-#define DEBUG
+//#define DEBUG
 
 // hashtable.h
 struct entry_s {
@@ -339,38 +339,50 @@ void scan_root_set() {
     // global variables
     for (int i = 0; i < global_var_count; ++i) {
         Obj* o = global_var[i];
-        Obj* post_gc_o = get_post_gc_ptr(o);
-        fprintf(stderr, "Global %d: %llx -> %llx\n", i, o, post_gc_o);
-        global_var[i] = post_gc_o;
+        if (o) {
+            Obj* post_gc_o = get_post_gc_ptr(o);
+#ifdef DEBUG
+            fprintf(stderr, "Global %d: %llx -> %llx\n", i, o, post_gc_o);
+#endif
+            global_var[i] = post_gc_o;
+        }
     }
     // operand stack
     for (int i = 0; i < operand_count; ++i) {
         Obj* o = operand[i];
         Obj* post_gc_o = get_post_gc_ptr(o);
+#ifdef DEBUG
         fprintf(stderr, "Operand: %llx -> %llx\n", o, post_gc_o);
+#endif
         operand[i] = post_gc_o;
     }
     // local frames
     for (Frame *p = sp, *np = next_sp; p != NULL; np = p, p = p->parent) {
         for (int i = 0; &(p->slots[i]) < (void **)np; ++i) {
             Obj* o = p->slots[i];
-            Obj* post_gc_o = get_post_gc_ptr(o);
-            fprintf(stderr, "Local: %llx -> %llx\n", o, post_gc_o);
-            p->slots[i] = post_gc_o;
-            assert((((Obj *)(p->slots[i]))->type) != -1, "Shouldn't broken heart?!");
+            if (o) {
+                Obj* post_gc_o = get_post_gc_ptr(o);
+#ifdef DEBUG
+                fprintf(stderr, "Local: %llx -> %llx\n", o, post_gc_o);
+#endif
+                p->slots[i] = post_gc_o;
+            }
         }
     }
 }
 
 inline static
 void garbage_collector() {
+#ifdef DEBUG
     fprintf(stderr, "Heap: %llx - %llx.\n", heap.head, heap.head + heap.total);
     fprintf(stderr, "Free: %llx - %llx.\n", freespace.head, freespace.head + freespace.total);
     fprintf(stderr, "Scan root set.\n");
+#endif
     // root set
     scan_root_set();
-
+#ifdef DEBUG
     fprintf(stderr, "Scan free space.\n");
+#endif
     // free space
     for (Obj *p = (Obj *)freespace.head; (Obj *)p < (Obj *)(freespace.head + freespace.used); ) {
         if (p->type == Int || p->type == Null) {
@@ -380,6 +392,9 @@ void garbage_collector() {
             ArrayObj *arr_p = (ArrayObj *)p;
             for (int i = 0; i < arr_p->length; ++i) {
                 Obj* post_gc_o = get_post_gc_ptr(arr_p->slots[i]);
+#ifdef DEBUG
+                fprintf(stderr, "Array slot: %llx -> %llx\n", arr_p->slots[i], post_gc_o);
+#endif
                 arr_p->slots[i] = post_gc_o;
             }
             p += (2 + arr_p->length);
@@ -396,6 +411,9 @@ void garbage_collector() {
             assert(numslots != -1, "Class not found.\n");
             for (int i = 0; i < numslots; ++i) {
                 Obj* post_gc_o = get_post_gc_ptr(obj_p->varslots[i]);
+#ifdef DEBUG
+                fprintf(stderr, "Object slot: %llx -> %llx\n", obj_p->varslots[i], post_gc_o);
+#endif
                 obj_p->varslots[i] = post_gc_o;
             }
             p += (2 + numslots);
@@ -405,8 +423,9 @@ void garbage_collector() {
             exit(1);
         }
     }
-
+#ifdef DEBUG
     fprintf(stderr, "Swap free space and heap.\n");
+#endif
     void *tmp = heap.head;
     int64_t tmp_size = heap.total;
 
@@ -421,10 +440,9 @@ void garbage_collector() {
 
 inline static
 void* halloc(int64_t nbytes) {
-    if (heap.used + nbytes > heap.total) {
-        fprintf(stderr, "Run GC.\n");
+    //if (heap.used + nbytes > heap.total) {
         garbage_collector();
-    }
+    //}
 
     if (heap.used + nbytes > heap.total) {
         fprintf(stderr, "Out of memory.\n");
@@ -502,15 +520,12 @@ void* ge(IntObj* x, IntObj *y) {
 }
 
 inline static
-ArrayObj* make_array_obj(IntObj *length, void* init) {
-    ArrayObj* o = halloc(sizeof(ArrayObj) + length->value * sizeof(void *));
+ArrayObj* make_array_obj(int length) {
+    ArrayObj* o = halloc(sizeof(ArrayObj) + length * sizeof(void *));
 
     o->type = Array;
-    o->length = length->value;
+    o->length = length;
 
-    for (int i = 0; i < o->length; i++) {
-        o->slots[i] = init;
-    }
     return o;
 }
 
@@ -567,7 +582,7 @@ void push_frame(Vector* code, int pc, int num_slots) {
     next_sp = (Frame *)((unsigned char *)next_sp + sizeof(Frame) + num_slots * sizeof(void *));
 
     for (int i = 0; i < num_slots; ++i)
-        sp->slots[i] = make_null_obj();
+        sp->slots[i] = NULL;
 }
 
 static inline
@@ -720,16 +735,15 @@ void interpret_bc(Program* p) {
     vm_init(p);
 #ifdef DEBUG
     //printf("Interpreting Bytecode Program:\n");
-    //print_prog(p);
+    print_prog(p);
 #endif
     while (sp->pc < sp->code->size) {
         ByteIns* ins = vector_get(sp->code, sp->pc);
 #ifdef DEBUG
         //printf("Interpreting: ");
-        //print_ins(ins);
+        print_ins(ins);
         //if (global_var[0]) printf(",  type: %lld, operand: %d", ((NullObj *)global_var[0])->type, operand_size);
-        //printf(", operand: %d", operand_count);
-        //printf("\n");
+        printf(", operand: %d\n", operand_count);
 #endif
         switch (ins->tag)
         {
@@ -749,10 +763,21 @@ void interpret_bc(Program* p) {
                 break;
             }
             case ARRAY_OP: {
-                void* init_val = pop();
-                IntObj* length = pop();
+                //void* init_val = pop();
+                
+                // HACK
+                IntObj* length = operand[operand_count-2];
+
                 assert(length->type == Int, "Invalid length type for ARRAY.\n");
-                ArrayObj* obj = make_array_obj(length, init_val);
+                ArrayObj* obj = make_array_obj(length->value);
+
+                void* init_val = pop();
+                pop();
+
+                for (int i = 0; i < obj->length; ++i) {
+                    obj->slots[i] = init_val;
+                }
+
                 push(obj);
                 break;
             }
@@ -796,13 +821,15 @@ void interpret_bc(Program* p) {
                 }
                 assert(numslots != -1, "Class not found.\n");
 
+                
+                ObjectObj* obj = make_object_obj(class_type, NULL, numslots);
+
                 void** args = malloc(sizeof(void *) * (numslots + 1));
                 for (int i = 0; i < numslots + 1; i++) {
                     args[i] = pop();
                 }
 
-                ObjectObj* parent = args[numslots];
-                ObjectObj* obj = make_object_obj(class_type, parent, numslots);
+                obj->parent = args[numslots];
 
                 for (int i = 0; i < numslots; i++) {
                     obj->varslots[i] = args[numslots - 1 - i];
