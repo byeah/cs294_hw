@@ -13,8 +13,6 @@
 #define DEBUG
 
 // hashtable.h
-
-
 struct entry_s {
     char* key;
     void* value;
@@ -202,61 +200,61 @@ void ht_free(Hashtable *hashtable, void(*free_val) (void *)) {
 typedef enum {
     Int = 0,
     Null,
-	Array,
+    Array,
 } ObjType;
 
 typedef struct {
-	int64_t type;
+    int64_t type;
 } Obj;
 
 typedef struct {
     int64_t type;
-	int64_t value;
+    int64_t value;
 } IntObj;
 
 typedef struct {
-	int64_t type;
-	void* forward;
+    int64_t type;
+    void* forward;
 } BrokenHeartObj;
 
 typedef struct {
-	int64_t type;
-	int64_t space;
+    int64_t type;
+    int64_t space;
 } NullObj;
 
 typedef struct {
-	int64_t type;
-	int64_t length;
-	void* slots[0];
+    int64_t type;
+    int64_t length;
+    void* slots[0];
 } ArrayObj;
 
 typedef struct {
-	int64_t type;
+    int64_t type;
     void* parent;
-	void* varslots[0];
+    void* varslots[0];
 } ObjectObj;
 
 static struct {
-	char* head;
+    char* head;
     int64_t used;
     int64_t total;
 } heap, freespace;
 
-inline static 
+inline static
 void init_heap() {
-	heap.head = malloc(1024 * 1024);
-	heap.used = 0;
-	heap.total = 1024 * 1024;
-	freespace.head = malloc(1024 * 1024);
-	freespace.used = 0;
-	freespace.total = 1024 * 1024;
+    heap.head = malloc(1024 * 1024);
+    heap.used = 0;
+    heap.total = 1024 * 1024;
+    freespace.head = malloc(1024 * 1024);
+    freespace.used = 0;
+    freespace.total = 1024 * 1024;
 }
 
 typedef struct frame_t {
-	struct frame_t *parent;
-	Vector* code;
-	int64_t pc;
-	void* slots[0];
+    struct frame_t *parent;
+    Vector* code;
+    int64_t pc;
+    void* slots[0];
 } Frame;
 
 static unsigned char *stack[1024 * 1024];
@@ -274,8 +272,8 @@ static void* global_var[128] = { NULL };
 static int global_var_count = 0;
 
 typedef struct {
-	int type;
-	int varslot_count;
+    int type;
+    int varslot_count;
 } ClassInfo;
 
 static ClassInfo class_table[1024];
@@ -284,149 +282,149 @@ static int class_table_count = 0;
 static inline
 void assert(int criteria, char *msg) {
 #ifdef DEBUG
-	if (!criteria) {
-		fprintf(stderr, msg);
-		exit(1);
-	}
+    if (!criteria) {
+        fprintf(stderr, msg);
+        exit(1);
+    }
 #endif
 }
 
-inline static 
+inline static
 void free_heap() {
-	free(heap.head);
-	free(freespace.head);
+    free(heap.head);
+    free(freespace.head);
 }
 
 inline static
 Obj* get_post_gc_ptr(Obj *obj) {
-	// already copied?
-	if (obj->type == -1) {
-		return ((BrokenHeartObj *)obj)->forward;
-	}
+    // already copied?
+    if (obj->type == -1) {
+        return ((BrokenHeartObj *)obj)->forward;
+    }
 
-	// calculate size
-	int64_t size = -1;
-	if (obj->type == Int || obj->type == Null) {
-		size = sizeof(IntObj);
-	}
-	else if (obj->type == Array) {
-		size = sizeof(ArrayObj) + ((ArrayObj *)obj)->length * sizeof(void *);
-	}
-	else {
-		int numslots = -1;
-		for (int i = 0; i < class_table_count; ++i) {
-			if (class_table[i].type == obj->type) {
-				numslots = class_table[i].varslot_count;
-				break;
-			}
-		}
-		assert(numslots != -1, "Class not found.\n");
-		size = sizeof(ObjectObj) + numslots * sizeof(void *);
-	}
+    // calculate size
+    int64_t size = -1;
+    if (obj->type == Int || obj->type == Null) {
+        size = sizeof(IntObj);
+    }
+    else if (obj->type == Array) {
+        size = sizeof(ArrayObj) + ((ArrayObj *)obj)->length * sizeof(void *);
+    }
+    else {
+        int numslots = -1;
+        for (int i = 0; i < class_table_count; ++i) {
+            if (class_table[i].type == obj->type) {
+                numslots = class_table[i].varslot_count;
+                break;
+            }
+        }
+        assert(numslots != -1, "Class not found.\n");
+        size = sizeof(ObjectObj) + numslots * sizeof(void *);
+    }
 
-	// copy
-	Obj* ret = (Obj *)(freespace.head + freespace.used);
-	memcpy(ret, obj, size);
-	freespace.used += size;
+    // copy
+    Obj* ret = (Obj *)(freespace.head + freespace.used);
+    memcpy(ret, obj, size);
+    freespace.used += size;
 
-	// broken heart
-	((BrokenHeartObj *)obj)->type = -1;
-	((BrokenHeartObj *)obj)->forward = ret;
+    // broken heart
+    ((BrokenHeartObj *)obj)->type = -1;
+    ((BrokenHeartObj *)obj)->forward = ret;
 
-	return ret;
+    return ret;
 }
 
 inline static
 void scan_root_set() {
-	// global variables
-	for (int i = 0; i < global_var_count; ++i) {
-		Obj* o = global_var[i];
-		if (o) {
-			Obj* post_gc_o = get_post_gc_ptr(o);
-			global_var[i] = post_gc_o;
-		}
-	}
-	// operand stack
-	for (int i = 0; i < operand_count; ++i) {
-		Obj* o = operand[i];
-		Obj* post_gc_o = get_post_gc_ptr(o);
-		operand[i] = post_gc_o;
-	}
-	// local frames
-	for (Frame *p = sp, *np = next_sp; p != NULL; np = p, p = p->parent) {
-		for (void **cur = p->slots; (void *) cur < (void *) np; ++cur) {
-			Obj* o = *cur;
-			Obj* post_gc_o = get_post_gc_ptr(o);
-			*cur = post_gc_o;
-		}
-	}
+    // global variables
+    for (int i = 0; i < global_var_count; ++i) {
+        Obj* o = global_var[i];
+        if (o) {
+            Obj* post_gc_o = get_post_gc_ptr(o);
+            global_var[i] = post_gc_o;
+        }
+    }
+    // operand stack
+    for (int i = 0; i < operand_count; ++i) {
+        Obj* o = operand[i];
+        Obj* post_gc_o = get_post_gc_ptr(o);
+        operand[i] = post_gc_o;
+    }
+    // local frames
+    for (Frame *p = sp, *np = next_sp; p != NULL; np = p, p = p->parent) {
+        for (void **cur = p->slots; (void *)cur < (void *)np; ++cur) {
+            Obj* o = *cur;
+            Obj* post_gc_o = get_post_gc_ptr(o);
+            *cur = post_gc_o;
+        }
+    }
 }
 
 inline static
 void garbage_collector() {
-	// root set
-	scan_root_set();
+    // root set
+    scan_root_set();
 
-	// free space
-	for (Obj *p = (Obj *)freespace.head; (Obj *) p < (Obj *) (freespace.head + freespace.used); ) {
-		if (p->type == Int || p->type == Null) {
-			p += 2;
-		}
-		else if (p->type == Array) {
-			ArrayObj *arr_p = (ArrayObj *)p;
-			for (int i = 0; i < arr_p->length; ++i) {
-				Obj* post_gc_o = get_post_gc_ptr(arr_p->slots[i]);
-				arr_p->slots[i] = post_gc_o;
-			}
-			p += (2 + arr_p->length);
-		}
-		else if (p->type > 2) {
-			ObjectObj *obj_p = (ObjectObj *)p;
-			int numslots = -1;
-			for (int i = 0; i < class_table_count; ++i) {
-				if (class_table[i].type == p->type) {
-					numslots = class_table[i].varslot_count;
-					break;
-				}
-			}
-			assert(numslots != -1, "Class not found.\n");
-			for (int i = 0; i < numslots; ++i) {
-				Obj* post_gc_o = get_post_gc_ptr(obj_p->varslots[i]);
-				obj_p->varslots[i] = post_gc_o;
-			}
-			p += (2 + numslots);
-		}
-		else {
-			printf("Unrecognized type: %lld.\n", p->type);
-			exit(1);
-		}
-	}
+    // free space
+    for (Obj *p = (Obj *)freespace.head; (Obj *)p < (Obj *)(freespace.head + freespace.used); ) {
+        if (p->type == Int || p->type == Null) {
+            p += 2;
+        }
+        else if (p->type == Array) {
+            ArrayObj *arr_p = (ArrayObj *)p;
+            for (int i = 0; i < arr_p->length; ++i) {
+                Obj* post_gc_o = get_post_gc_ptr(arr_p->slots[i]);
+                arr_p->slots[i] = post_gc_o;
+            }
+            p += (2 + arr_p->length);
+        }
+        else if (p->type > 2) {
+            ObjectObj *obj_p = (ObjectObj *)p;
+            int numslots = -1;
+            for (int i = 0; i < class_table_count; ++i) {
+                if (class_table[i].type == p->type) {
+                    numslots = class_table[i].varslot_count;
+                    break;
+                }
+            }
+            assert(numslots != -1, "Class not found.\n");
+            for (int i = 0; i < numslots; ++i) {
+                Obj* post_gc_o = get_post_gc_ptr(obj_p->varslots[i]);
+                obj_p->varslots[i] = post_gc_o;
+            }
+            p += (2 + numslots);
+        }
+        else {
+            printf("Unrecognized type: %lld.\n", p->type);
+            exit(1);
+        }
+    }
 
-	void *tmp = heap.head;
-	int64_t tmp_size = heap.total;
-	
-	heap.head = freespace.head;
-	heap.total = freespace.total;
-	heap.used = freespace.used;
-	
-	freespace.head = tmp;
-	freespace.used = 0;
-	freespace.total = tmp_size;
+    void *tmp = heap.head;
+    int64_t tmp_size = heap.total;
+
+    heap.head = freespace.head;
+    heap.total = freespace.total;
+    heap.used = freespace.used;
+
+    freespace.head = tmp;
+    freespace.used = 0;
+    freespace.total = tmp_size;
 }
 
 inline static
 void* halloc(int64_t nbytes) {
-	if (heap.used + nbytes > heap.total)
-		garbage_collector();
+    if (heap.used + nbytes > heap.total)
+        garbage_collector();
 
-	if (heap.used + nbytes > heap.total) {
-		fprintf(stderr, "out of memory.\n");
-		exit(1);
-	}
+    if (heap.used + nbytes > heap.total) {
+        fprintf(stderr, "out of memory.\n");
+        exit(1);
+    }
 
-	void *p = heap.head + heap.used;
-	heap.used += nbytes;
-	return p;
+    void *p = heap.head + heap.used;
+    heap.used += nbytes;
+    return p;
 }
 
 inline static
@@ -439,7 +437,7 @@ IntObj* make_int_obj(int64_t value) {
 
 inline static
 NullObj* make_null_obj() {
-	NullObj* o = halloc(sizeof(NullObj));
+    NullObj* o = halloc(sizeof(NullObj));
     o->type = Null;
     return o;
 }
@@ -471,27 +469,27 @@ IntObj* modulo(IntObj* x, IntObj *y) {
 
 inline static
 void* eq(IntObj* x, IntObj *y) {
-    return (x->value == y->value) ? (void *) make_int_obj(0) : (void *) make_null_obj();
+    return (x->value == y->value) ? (void *)make_int_obj(0) : (void *)make_null_obj();
 }
 
 inline static
 void* lt(IntObj* x, IntObj *y) {
-    return (x->value < y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
+    return (x->value < y->value) ? (void *)make_int_obj(0) : (void *)make_null_obj();
 }
 
 inline static
 void* le(IntObj* x, IntObj *y) {
-    return (x->value <= y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
+    return (x->value <= y->value) ? (void *)make_int_obj(0) : (void *)make_null_obj();
 }
 
 inline static
 void* gt(IntObj* x, IntObj *y) {
-    return (x->value > y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
+    return (x->value > y->value) ? (void *)make_int_obj(0) : (void *)make_null_obj();
 }
 
 inline static
 void* ge(IntObj* x, IntObj *y) {
-    return (x->value >= y->value) ? (void *)make_int_obj(0) : (void *) make_null_obj();
+    return (x->value >= y->value) ? (void *)make_int_obj(0) : (void *)make_null_obj();
 }
 
 inline static
@@ -557,7 +555,7 @@ void push_frame(Vector* code, int pc, int num_slots) {
     next_sp->pc = pc;
 
     sp = next_sp;
-    next_sp = (Frame *)((unsigned char *) next_sp + sizeof(Frame) + num_slots * sizeof(void *));
+    next_sp = (Frame *)((unsigned char *)next_sp + sizeof(Frame) + num_slots * sizeof(void *));
 }
 
 static inline
@@ -566,14 +564,14 @@ void pop_frame() {
     sp = sp->parent;
 }
 
-static 
+static
 int find_slot_index(Vector *values, ClassValue* cvalue, int name) {
     int slot_cnt = 0;
 
     for (int i = 0; i < cvalue->slots->size; ++i) {
         int value_index = (int)vector_get(cvalue->slots, i);
         Value *value = vector_get(values, value_index);
-        
+
         if (value->tag == SLOT_VAL) {
             SlotValue *sval = (SlotValue *)value;
             if (sval->name == name)
@@ -588,7 +586,7 @@ int find_slot_index(Vector *values, ClassValue* cvalue, int name) {
 static
 MethodValue* find_method(Vector *values, ClassValue* cvalue, int name) {
     for (int i = 0; i < cvalue->slots->size; ++i) {
-        int value_index = (int) vector_get(cvalue->slots, i);
+        int value_index = (int)vector_get(cvalue->slots, i);
         Value *value = vector_get(values, value_index);
 
         if (value->tag == METHOD_VAL) {
@@ -612,7 +610,7 @@ void vm_init(Program* p) {
     // init entry func
     MethodValue* entry_func = vector_get(p->values, p->entry);
     push_frame(entry_func->code, 0, entry_func->nargs + entry_func->nlocals);
-    
+
     // init global
     for (int i = 0; i < p->slots->size; ++i) {
         int index = (int)vector_get(p->slots, i);
@@ -632,7 +630,7 @@ void vm_init(Program* p) {
                 StringValue *name = vector_get(p->values, slot_val->name);
                 assert(name->tag == STRING_VAL, "Invalid object type.\n");
 
-                ht_put(global_var_name, name->value, (void *) (global_var_count++));
+                ht_put(global_var_name, name->value, (void *)(global_var_count++));
 
                 break;
             }
@@ -641,25 +639,25 @@ void vm_init(Program* p) {
         }
     }
 
-	// init class info
-	for (int i = 0; i < p->values->size; ++i) {
-		Value* value = vector_get(p->values, i);
-		if (value->tag == CLASS_VAL) {
-			ClassValue *cval = (ClassValue *)value;
+    // init class info
+    for (int i = 0; i < p->values->size; ++i) {
+        Value* value = vector_get(p->values, i);
+        if (value->tag == CLASS_VAL) {
+            ClassValue *cval = (ClassValue *)value;
 
-			ClassInfo *info = &class_table[class_table_count++];
-			info->type = i + 3;
+            ClassInfo *info = &class_table[class_table_count++];
+            info->type = i + 3;
 
-			for (int j = 0; j < cval->slots->size; ++j) {
-				int index = (int)vector_get(cval->slots, j);
-				Value *slot = vector_get(p->values, index);
+            for (int j = 0; j < cval->slots->size; ++j) {
+                int index = (int)vector_get(cval->slots, j);
+                Value *slot = vector_get(p->values, index);
 
-				if (value->tag == SLOT_VAL) {
-					++(info->varslot_count);
-				}
-			}
-		}
-	}
+                if (value->tag == SLOT_VAL) {
+                    ++(info->varslot_count);
+                }
+            }
+        }
+    }
 
     // preprocess labels
     labels = ht_create(13);
@@ -716,9 +714,9 @@ void interpret_bc(Program* p) {
 #ifdef DEBUG
         printf("Interpreting: ");
         print_ins(ins);
-		//if (global_var[0]) printf(",  type: %lld, operand: %d", ((NullObj *)global_var[0])->type, operand_size);
-		printf(", operand: %d", operand_count);
-		printf("\n");
+        //if (global_var[0]) printf(",  type: %lld, operand: %d", ((NullObj *)global_var[0])->type, operand_size);
+        printf(", operand: %d", operand_count);
+        printf("\n");
 #endif
         switch (ins->tag)
         {
@@ -773,7 +771,7 @@ void interpret_bc(Program* p) {
             }
             case OBJECT_OP: {
                 ObjectIns* obj_ins = (ObjectIns*)ins;
-                
+
                 int64_t class_type = obj_ins->class + 3;
 
                 ClassValue* class = vector_get(p->values, obj_ins->class);
@@ -816,10 +814,10 @@ void interpret_bc(Program* p) {
 
                 ObjectObj* obj = pop();
                 assert(obj->type > 2, "Get slot should be with an object!");
-                
+
                 //StringValue *name = vector_get(p->values, slot_ins->name);
                 //assert(name->tag == STRING_VAL, "Invalid string type for SLOT_OP.\n");
-                
+
                 int idx = -1;
 
                 for (ObjectObj* obj_for_search = obj; obj_for_search != NULL && idx == -1; obj_for_search = obj_for_search->parent) {
@@ -842,7 +840,7 @@ void interpret_bc(Program* p) {
 
                 //StringValue *name = vector_get(p->values, set_slot_ins->name);
                 //assert(name->tag == STRING_VAL, "Invalid string type for SET_SLOT_OP.\n");
-                
+
                 int idx = -1;
 
                 for (ObjectObj* obj_for_search = obj; obj_for_search != NULL && idx == -1; obj_for_search = obj_for_search->parent) {
@@ -860,25 +858,25 @@ void interpret_bc(Program* p) {
             case CALL_SLOT_OP: {
                 CallSlotIns* call_slot = (CallSlotIns*)ins;
                 void** args = malloc(sizeof(void *) * (call_slot->arity));
-                
+
                 for (int i = 0; i < call_slot->arity; i++) {
                     args[i] = pop();
                 }
-                
+
                 NullObj* receiver = args[call_slot->arity - 1];
 
                 StringValue *name = vector_get(p->values, call_slot->name);
-                
+
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
-                
+
                 //printf("CALL_SLOT_OP receiver type: %lld\n", receiver->type);
 
                 switch (receiver->type) {
                     case Int: {
-                        IntObj* iobj = (IntObj*) receiver;
+                        IntObj* iobj = (IntObj*)receiver;
 
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
-                        
+
                         IntObj* ipara = args[0];
                         if (ipara->type != Int) {
                             printf("Error: Operand %s to Int must be Int.\n", name->value);
@@ -886,23 +884,23 @@ void interpret_bc(Program* p) {
                         }
 
                         if (strcmp(name->value, "add") == 0)
-                            push(add(iobj, ipara)); 
+                            push(add(iobj, ipara));
                         else if (strcmp(name->value, "sub") == 0)
-                            push(subtract(iobj, ipara)); 
+                            push(subtract(iobj, ipara));
                         else if (strcmp(name->value, "mul") == 0)
-                            push(multiply(iobj, ipara)); 
+                            push(multiply(iobj, ipara));
                         else if (strcmp(name->value, "div") == 0)
-                            push(divide(iobj, ipara)); 
+                            push(divide(iobj, ipara));
                         else if (strcmp(name->value, "mod") == 0)
-                            push(modulo(iobj, ipara)); 
+                            push(modulo(iobj, ipara));
                         else if (strcmp(name->value, "lt") == 0)
-                            push(lt(iobj, ipara)); 
+                            push(lt(iobj, ipara));
                         else if (strcmp(name->value, "gt") == 0)
-                            push(gt(iobj, ipara)); 
+                            push(gt(iobj, ipara));
                         else if (strcmp(name->value, "le") == 0)
-                            push(le(iobj, ipara)); 
+                            push(le(iobj, ipara));
                         else if (strcmp(name->value, "ge") == 0)
-                            push(ge(iobj, ipara)); 
+                            push(ge(iobj, ipara));
                         else if (strcmp(name->value, "eq") == 0)
                             push(eq(iobj, ipara));
                         else
@@ -912,16 +910,18 @@ void interpret_bc(Program* p) {
                     }
 
                     case Array: {
-                        ArrayObj* aobj = (ArrayObj*) receiver;
+                        ArrayObj* aobj = (ArrayObj*)receiver;
 
                         if (strcmp(name->value, "length") == 0)
-                            push(array_length(aobj)); 
+                            push(array_length(aobj));
                         else if (strcmp(name->value, "set") == 0) {
-                            IntObj* index = (IntObj*) args[1];
+                            IntObj* index = (IntObj*)args[1];
                             push(array_set(aobj, index, args[0]));
-                        } else if (strcmp(name->value, "get") == 0) {
+                        }
+                        else if (strcmp(name->value, "get") == 0) {
                             push(array_get(aobj, (IntObj*)args[0]));
-                        } else {
+                        }
+                        else {
                             printf("Error: Operator %s not recognized.\n", name->value);
                             exit(-1);
                         }
@@ -934,7 +934,7 @@ void interpret_bc(Program* p) {
                     }
 
                     default: {
-                        ObjectObj* oobj = (ObjectObj *) receiver;
+                        ObjectObj* oobj = (ObjectObj *)receiver;
 
                         //StringValue *name = vector_get(p->values, call_slot->name);
                         //assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
@@ -952,7 +952,7 @@ void interpret_bc(Program* p) {
                         assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
 
                         push_frame(method->code, -1, method->nargs + method->nlocals + 1);
-                        
+
                         for (int i = 0; i < call_slot->arity; i++) {
                             sp->slots[i] = args[call_slot->arity - 1 - i];
                         }
@@ -977,9 +977,9 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, set_global_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid object type for SET_GLOBAL_OP.\n");
 
-                int var_idx = (int) ht_get(global_var_name, name->value);
+                int var_idx = (int)ht_get(global_var_name, name->value);
                 global_var[var_idx] = peek();
-                
+
                 //printf("SET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
 
                 break;
@@ -989,7 +989,7 @@ void interpret_bc(Program* p) {
                 StringValue *name = vector_get(p->values, get_global_ins->name);
                 assert(name->tag == STRING_VAL, "Invalid object type for GET_GLOBAL_OP.\n");
 
-                int var_idx = (int) ht_get(global_var_name, name->value);
+                int var_idx = (int)ht_get(global_var_name, name->value);
                 push(global_var[var_idx]);
 
                 //printf("GET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
@@ -1009,14 +1009,14 @@ void interpret_bc(Program* p) {
                 if (predicate->type != Null) {
                     BranchIns* branch_ins = (BranchIns *)ins;
                     StringValue *name = vector_get(p->values, branch_ins->name);
-                    
+
                     assert(name->tag == STRING_VAL, "Invalid object type for BRANCH_OP.\n");
 
                     LabelAddr* label = ht_get(labels, name->value);
-                    
+
                     assert(label != NULL, "Label not found in BRANCH_OP.\n");
                     assert(label->code == sp->code, "Cross method jump is not allowed for BRANCH_OP.\n");
-                    
+
                     sp->pc = label->pc;
                 }
                 break;
@@ -1059,10 +1059,10 @@ void interpret_bc(Program* p) {
                 break;
             }
             case RETURN_OP: {
-				assert(operand_count == 1, "Operand stack should contain only one element when return is called.\n");
+                assert(operand_count == 1, "Operand stack should contain only one element when return is called.\n");
                 pop_frame();
 
-                if (sp == NULL){
+                if (sp == NULL) {
                     return;
                 }
 
