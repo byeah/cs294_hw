@@ -375,6 +375,8 @@ int compile_slotstmt(Hashtable_i* env, MethodValue* m, SlotStmt* s) { // Return 
             for (int i = 0; i<s2->nargs; i++)
                 ht_put_i(new_env, s2->args[i], i + 1);
             compile_stmt(new_env, func, s2->body);
+            //if (((ByteIns*)vector_peek(func->code))->tag != DROP_OP)printf("!!!\n");
+            vector_pop(func->code);
             addIns(func, make_return());
             return func_id;
         }
@@ -446,7 +448,6 @@ void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e){
             compile_exp(env, m, e2->exp);
             compile_exp(env, m, e2->value);
             addIns(m, make_set_slot(getStrId(e2->name)));
-            addIns(m, make_drop());
             break;
         }
         case CALL_SLOT_EXP: {
@@ -508,7 +509,6 @@ void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e){
                     printf("Error: variable not found when setting its value\n");
                     exit(-1);
                 }*/
-            addIns(m, make_drop());
             break;
         }
         case IF_EXP: {
@@ -521,9 +521,11 @@ void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e){
             compile_exp(env, m, e2->pred);
             addIns(m, make_branch(label1));
             compile_stmt(env, m, e2->alt);
+            vector_pop(m->code);
             addIns(m, make_goto(label2));
             addIns(m, make_label_ins(label1));
             compile_stmt(env, m, e2->conseq);
+            vector_pop(m->code);
             addIns(m, make_label_ins(label2));
             break;
         }
@@ -543,6 +545,7 @@ void compile_exp(Hashtable_i* env, MethodValue* m, Exp* e){
             compile_stmt(env, m, e2->body);
             addIns(m, make_goto(start));
             addIns(m, make_label_ins(end));
+            addIns(m, make_lit(get_null()));
             break;
         }
         case REF_EXP: {
@@ -617,6 +620,9 @@ void compile_stmt(Hashtable_i* env, MethodValue* m, ScopeStmt* s){
             //ht_put_i(s2->name, func_id);
             compile_stmt(new_env, func, s2->body);
             vector_add(pro->slots, (void*)func_id);
+//            printf("%s Func last: %d\n",s2->name,((ByteIns*)vector_peek(func->code))->tag);
+//            if (((ByteIns*)vector_peek(func->code))->tag != DROP_OP)printf("!!!\n");
+            vector_pop(func->code);
             addIns(func, make_return());
             break;
         }
@@ -635,6 +641,8 @@ void compile_stmt(Hashtable_i* env, MethodValue* m, ScopeStmt* s){
 #endif
             ScopeExp* s2 = (ScopeExp*)s;
             compile_exp(env, m, s2->exp);
+            //if (s2->exp->tag == CALL_EXP || s2->exp->tag == CALL_SLOT_EXP)
+            addIns(m, make_drop());
             break;
         }
         default:
