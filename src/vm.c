@@ -11,6 +11,7 @@
 #endif
 
 //#define DEBUG
+#define STAT
 
 // hashtable.h
 struct entry_s {
@@ -257,6 +258,11 @@ typedef struct frame_t {
     void* slots[0];
 } Frame;
 
+#ifdef STAT
+int64_t total_halloc = 0;
+int64_t total_halloc_int = 0;
+#endif
+
 static unsigned char *stack[1024 * 1024];
 static Frame* sp = NULL;
 static Frame* next_sp = (Frame *)stack;
@@ -440,6 +446,10 @@ void garbage_collector() {
 
 inline static
 void* halloc(int64_t nbytes) {
+#ifdef STAT
+    total_halloc += nbytes;
+#endif
+
     if (heap.used + nbytes > heap.total) {
         garbage_collector();
     }
@@ -456,6 +466,9 @@ void* halloc(int64_t nbytes) {
 
 inline static
 IntObj* make_int_obj(int64_t value) {
+#ifdef STAT
+    total_halloc_int += sizeof(IntObj);
+#endif
     IntObj* o = halloc(sizeof(IntObj));
     o->type = Int;
     o->value = value;
@@ -1111,7 +1124,9 @@ void interpret_bc(Program* p) {
         }
         ++sp->pc;
     }
-
+#ifdef STAT
+    printf("Total halloc: %lld bytes, halloc for int: %lld bytes\n",total_halloc,total_halloc_int);
+#endif
     printf("\n");
 }
 
