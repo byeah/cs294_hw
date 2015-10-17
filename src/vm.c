@@ -1155,8 +1155,8 @@ void interpret_bc(Program* p) {
         ++sp->pc;
     }
 #ifdef STAT
-    printf("Total halloc: %lld bytes, halloc for int: %lld bytes\n",total_halloc,total_halloc_int);
-    printf("Total GC time: %.4lfms\n",gc_time);
+    fprintf(stderr, "Total halloc: %lld bytes, halloc for int: %lld bytes\n", total_halloc, total_halloc_int);
+    fprintf(stderr, "Total GC time: %.4lfms\n", gc_time);
 #endif
     printf("\n");
 }
