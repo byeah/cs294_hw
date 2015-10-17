@@ -12,6 +12,25 @@
 
 //#define DEBUG
 #define STAT
+#ifdef WIN32
+
+#include <windows.h>
+#define TIME_T LARGE_INTEGER
+#define FREQ_T LARGE_INTEGER
+#define TIME(t) QueryPerformanceCounter(&(t))
+#define FREQ(f) QueryPerformanceFrequency(&(f))
+#define ELASPED_TIME(t1, t2, freq) ((t2).QuadPart - (t1).QuadPart) * 1000.0 / (freq).QuadPart
+
+#else
+
+#include <sys/time.h>
+#define TIME_T struct timeval
+#define FREQ_T double
+#define TIME(t) gettimeofday(&(t), NULL)
+#define FREQ(f) 1.0
+#define ELASPED_TIME(t1, t2, freq) ((t2).tv_sec - (t1).tv_sec) * 1000.0 + ((t2).tv_usec - (t1).tv_usec) / 1000.0
+
+#endif
 
 // hashtable.h
 struct entry_s {
@@ -261,6 +280,7 @@ typedef struct frame_t {
 #ifdef STAT
 int64_t total_halloc = 0;
 int64_t total_halloc_int = 0;
+double gc_time = 0.0;
 #endif
 
 static unsigned char *stack[1024 * 1024];
@@ -379,6 +399,12 @@ void scan_root_set() {
 
 inline static
 void garbage_collector() {
+#ifdef STAT
+    TIME_T t1, t2;
+    FREQ_T freq;
+    FREQ(freq);
+    TIME(t1);
+#endif
 #ifdef DEBUG
     fprintf(stderr, "Heap: %llx - %llx.\n", heap.head, heap.head + heap.total);
     fprintf(stderr, "Free: %llx - %llx.\n", freespace.head, freespace.head + freespace.total);
@@ -442,6 +468,10 @@ void garbage_collector() {
     freespace.head = tmp;
     freespace.used = 0;
     freespace.total = tmp_size;
+#ifdef STAT
+    TIME(t2);
+    gc_time += ELASPED_TIME(t1, t2, freq);
+#endif
 }
 
 inline static
@@ -1126,6 +1156,7 @@ void interpret_bc(Program* p) {
     }
 #ifdef STAT
     printf("Total halloc: %lld bytes, halloc for int: %lld bytes\n",total_halloc,total_halloc_int);
+    printf("Total GC time: %.4lfms\n",gc_time);
 #endif
     printf("\n");
 }
