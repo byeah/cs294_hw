@@ -6,7 +6,7 @@
 #include "compiler.h"
 #include "vm.h"
 
-//#define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 #ifdef WIN32
