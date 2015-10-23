@@ -786,7 +786,7 @@ void interpret_bc(Program* p) {
                         else if (strcmp(name->value, "sub") == 0)
                             push(i - j);
                         else if (strcmp(name->value, "mul") == 0)
-                            push((i * j) >> 3);
+                            push(i * (j >> 3));
                         else if (strcmp(name->value, "div") == 0)
                             push((i / j) << 3);
                         else if (strcmp(name->value, "mod") == 0)
