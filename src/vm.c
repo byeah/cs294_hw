@@ -32,189 +32,45 @@
 
 #endif
 
-// hashtable.h
-struct entry_s {
-    char* key;
+typedef struct {
+    int key;
     void* value;
-    struct entry_s* next;
-};
+} ht_item_t;
 
-typedef struct entry_s entry_t;
+typedef struct {
+    ht_item_t bucket[1001];
+} ht_t;
 
-struct hashtable_s {
-    int size;
-    struct entry_s** table;
-};
+static inline
+void ht_init(ht_t *ht) {
+    for (int i = 0; i < 1001; ++i) {
+        ht->bucket[i].key = -1;
+    }
+}
 
-typedef struct hashtable_s Hashtable;
+static inline
+int find_slot(ht_t *ht, int key) {
+    int i = key % 1001;
+    while (ht->bucket[i].key != -1 && ht->bucket[i].key != key) {
+        i = (i + 1) % 1001;
+    }
+    return i;
+}
 
-Hashtable* ht_create(int size);
+static inline
+void ht_put(ht_t *ht, int key, void *value) {
+    int i = find_slot(ht, key);
+    ht->bucket[i].key = key;
+    ht->bucket[i].value = value;
+}
 
-void ht_put(Hashtable* hashtable, char* key, void* value);
-void* ht_get(Hashtable *hashtable, char *key);
-void ht_remove(Hashtable *hashtable, char *key);
-void ht_free(Hashtable *hashtable, void(*free_val) (void *));
-
-// hashtable.c
-
-Hashtable* ht_create(int size) {
-    Hashtable* hashtable = NULL;
-
-    if (size < 1) {
+static inline
+void* ht_get(ht_t *ht, int key) {
+    int i = find_slot(ht, key);
+    if (ht->bucket[i].key == key)
+        return ht->bucket[i].value;
+    else
         return NULL;
-    }
-
-    if ((hashtable = malloc(sizeof(Hashtable))) == NULL) {
-        return NULL;
-    }
-
-    if ((hashtable->table = malloc(sizeof(entry_t) * size)) == NULL) {
-        return NULL;
-    }
-
-    for (int i = 0; i < size; ++i) {
-        hashtable->table[i] = NULL;
-    }
-
-    hashtable->size = size;
-
-    return hashtable;
-}
-
-inline
-int ht_hash(Hashtable* hashtable, char* key) {
-    size_t hash, i;
-    size_t length = strlen(key);
-
-    for (hash = i = 0; i < length; ++i) {
-        hash += key[i], hash += (hash << 10), hash ^= (hash >> 6);
-    }
-    hash += (hash << 3), hash ^= (hash >> 11), hash += (hash << 15);
-
-    return hash % hashtable->size;
-}
-
-inline
-entry_t* ht_newpair(char *key, void *value) {
-    entry_t* newpair;
-    if ((newpair = malloc(sizeof(entry_t))) == NULL) {
-        return NULL;
-    }
-    // No longer duplicate key string. Use it at your own risk :)
-    /*
-    if ((newpair->key = strdup(key)) == NULL) {
-    return NULL;
-    }
-    */
-    newpair->key = key;
-    newpair->value = value;
-    newpair->next = NULL;
-    return newpair;
-}
-
-void ht_put(Hashtable* hashtable, char* key, void* value) {
-    entry_t* newpair = NULL;
-    entry_t* current = NULL;
-    entry_t* prev = NULL;
-
-    int bin = ht_hash(hashtable, key);
-    current = hashtable->table[bin];
-
-    while (current != NULL && strcmp(key, current->key) != 0) {
-        prev = current;
-        current = current->next;
-    }
-
-    /* There's already a pair.  Let's replace that string. */
-    if (current != NULL) {
-        current->value = value;
-    }
-    /* Nope, could't find it.  Time to grow a pair. */
-    else {
-        newpair = ht_newpair(key, value);
-
-        /* We're at the start of the linked list in this bin. */
-        if (prev == NULL) {
-            hashtable->table[bin] = newpair;
-        }
-        /* We're at the end of the linked list in this bin. */
-        else {
-            prev->next = newpair;
-        }
-    }
-}
-
-inline
-void* ht_get_local(Hashtable *hashtable, char *key, int bin) {
-    entry_t* current = NULL;
-    entry_t* prev = NULL;
-
-    /* Step through the bin, looking for our value. */
-    current = hashtable->table[bin];
-    while (current != NULL && strcmp(key, current->key) != 0) {
-        prev = current;
-        current = current->next;
-    }
-
-    /* Did we actually find anything? */
-    if (current == NULL) {
-        return NULL;
-    }
-    else {
-        return current->value;
-    }
-}
-
-void* ht_get(Hashtable *hashtable, char *key) {
-    int bin = ht_hash(hashtable, key);
-    return ht_get_local(hashtable, key, bin);
-}
-
-void ht_remove(Hashtable *hashtable, char *key) {
-    int bin = 0;
-    entry_t* current = NULL;
-    entry_t* prev = NULL;
-
-    bin = ht_hash(hashtable, key);
-
-    /* Step through the bin, looking for our value. */
-    current = hashtable->table[bin];
-    while (current != NULL && strcmp(key, current->key) != 0) {
-        prev = current;
-        current = current->next;
-    }
-
-    /* Did we actually find anything? */
-    if (current == NULL) {
-        return;
-    }
-    else {
-        /* We're at the start of the linked list in this bin. */
-        if (prev == NULL) {
-            hashtable->table[bin] = current->next;
-        }
-        /* Otherwise */
-        else {
-            prev->next = current->next;
-        }
-        // free(current->key);
-        free(current);
-    }
-}
-
-void ht_free(Hashtable *hashtable, void(*free_val) (void *)) {
-    for (int i = 0; i < hashtable->size; ++i) {
-        entry_t* current = hashtable->table[i];
-        while (current != NULL) {
-            entry_t* temp = current->next;
-            if (free_val != NULL)
-                free_val(current->value);
-            free(current);
-            current = temp;
-        }
-        hashtable->table[i] = NULL;
-    }
-    free(hashtable);
 }
 
 static inline
@@ -338,9 +194,9 @@ static unsigned char *stack[1024 * 1024];
 static Frame* sp = NULL;
 static Frame* next_sp = (Frame *)stack;
 
-static Hashtable* global_func_name = NULL;
-static Hashtable* global_var_name = NULL;
-static Hashtable* labels = NULL;
+static ht_t global_func_name;
+static ht_t global_var_name;
+static ht_t labels;
 
 static TaggedVal operand[1024] = { 0 };
 static int operand_count = 0;
@@ -650,8 +506,9 @@ void vm_init(Program* p) {
     init_heap();
 
     // init global symbol tables
-    global_func_name = ht_create(13);
-    global_var_name = ht_create(13);
+    ht_init(&global_func_name);
+    ht_init(&global_var_name);
+    ht_init(&labels);
 
     // init entry func
     MethodValue* entry_func = vector_get(p->values, p->entry);
@@ -664,20 +521,12 @@ void vm_init(Program* p) {
         switch (value->tag) {
             case METHOD_VAL: {
                 MethodValue* method_val = (MethodValue *)value;
-                StringValue *name = vector_get(p->values, method_val->name);
-                assert(name->tag == STRING_VAL, "Invalid object type.\n");
-
-                ht_put(global_func_name, name->value, method_val);
-
+                ht_put(&global_func_name, method_val->name, method_val);
                 break;
             }
             case SLOT_VAL: {
                 SlotValue* slot_val = (SlotValue *)value;
-                StringValue *name = vector_get(p->values, slot_val->name);
-                assert(name->tag == STRING_VAL, "Invalid object type.\n");
-
-                ht_put(global_var_name, name->value, (void *)(global_var_count++));
-
+                ht_put(&global_var_name, slot_val->name, (void *)(global_var_count++));
                 break;
             }
             default:
@@ -707,7 +556,7 @@ void vm_init(Program* p) {
     }
 
     // preprocess labels
-    labels = ht_create(13);
+    
 
     for (int i = 0; i < p->values->size; ++i) {
         Value* val = vector_get(p->values, i);
@@ -719,19 +568,13 @@ void vm_init(Program* p) {
             if (ins->tag != LABEL_OP)
                 continue;
             LabelIns* label_ins = (LabelIns *)ins;
-            StringValue *label_string = vector_get(p->values, label_ins->name);
-            assert(label_string->tag == STRING_VAL, "Invalid object type for LABEL.\n");
-
-            ht_put(labels, label_string->value, make_label(method->code, j));
+            ht_put(&labels, label_ins->name, make_label(method->code, j));
         }
     }
 }
 
 static inline
 void vm_cleanup() {
-    ht_free(global_func_name, NULL);
-    ht_free(global_var_name, NULL);
-    ht_free(labels, free);
     free_heap();
 }
 
@@ -756,7 +599,7 @@ void interpret_bc(Program* p) {
     vm_init(p);
 #ifdef DEBUG
     //printf("Interpreting Bytecode Program:\n");
-    print_prog(p);
+    //print_prog(p);
 #endif
     while (sp->pc < sp->code->size) {
         ByteIns* ins = vector_get(sp->code, sp->pc);
@@ -1037,10 +880,8 @@ void interpret_bc(Program* p) {
             }
             case SET_GLOBAL_OP: {
                 SetGlobalIns *set_global_ins = (SetGlobalIns *)ins;
-                StringValue *name = vector_get(p->values, set_global_ins->name);
-                assert(name->tag == STRING_VAL, "Invalid object type for SET_GLOBAL_OP.\n");
 
-                int64_t var_idx = (int64_t)ht_get(global_var_name, name->value);
+                int64_t var_idx = (int64_t)ht_get(&global_var_name, set_global_ins->name);
                 global_var[var_idx] = peek();
 
                 //printf("SET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
@@ -1049,10 +890,8 @@ void interpret_bc(Program* p) {
             }
             case GET_GLOBAL_OP: {
                 GetGlobalIns *get_global_ins = (GetGlobalIns *)ins;
-                StringValue *name = vector_get(p->values, get_global_ins->name);
-                assert(name->tag == STRING_VAL, "Invalid object type for GET_GLOBAL_OP.\n");
 
-                int64_t var_idx = (int64_t)ht_get(global_var_name, name->value);
+                int64_t var_idx = (int64_t)ht_get(&global_var_name, get_global_ins->name);
                 push(global_var[var_idx]);
 
                 //printf("GET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
@@ -1072,11 +911,8 @@ void interpret_bc(Program* p) {
 
                 if (untag_type(predicate) != Null) {
                     BranchIns* branch_ins = (BranchIns *)ins;
-                    StringValue *name = vector_get(p->values, branch_ins->name);
 
-                    assert(name->tag == STRING_VAL, "Invalid object type for BRANCH_OP.\n");
-
-                    LabelAddr* label = ht_get(labels, name->value);
+                    LabelAddr* label = ht_get(&labels, branch_ins->name);
 
                     assert(label != NULL, "Label not found in BRANCH_OP.\n");
                     assert(label->code == sp->code, "Cross method jump is not allowed for BRANCH_OP.\n");
@@ -1087,11 +923,8 @@ void interpret_bc(Program* p) {
             }
             case GOTO_OP: {
                 GotoIns* goto_ins = (GotoIns *)ins;
-                StringValue *name = vector_get(p->values, goto_ins->name);
 
-                assert(name->tag == STRING_VAL, "Invalid object type for GOTO_OP.\n");
-
-                LabelAddr* label = ht_get(labels, name->value);
+                LabelAddr* label = ht_get(&labels, goto_ins->name);
 
                 assert(label != NULL, "Label not found in GOTO_OP.\n");
                 assert(label->code == sp->code, "Cross method jump is not allowed for GOTO_OP.\n");
@@ -1101,10 +934,8 @@ void interpret_bc(Program* p) {
             }
             case CALL_OP: {
                 CallIns* call_ins = (CallIns *)ins;
-                StringValue *name = vector_get(p->values, call_ins->name);
-                assert(name->tag == STRING_VAL, "Invalid string type for CALL_OP.\n");
 
-                MethodValue *method_val = ht_get(global_func_name, name->value);
+                MethodValue *method_val = ht_get(&global_func_name, call_ins->name);
                 assert(method_val && method_val->tag == METHOD_VAL, "Invalid method type for CALL_OP.\n");
 
                 push_frame(method_val->code, -1, method_val->nargs + method_val->nlocals);
