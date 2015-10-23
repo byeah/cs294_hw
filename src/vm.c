@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include "utils.h"
 #include "bytecode.h"
 #include "vm.h"
@@ -353,7 +354,7 @@ void garbage_collector() {
             p += (2 + numslots);
         }
         else {
-            printf("Unrecognized type: %lld.\n", p->type);
+            printf("Unrecognized type: %" PRId64 ".\n", p->type);
             exit(1);
         }
     }
@@ -606,7 +607,6 @@ void interpret_bc(Program* p) {
 #ifdef DEBUG
         //printf("Interpreting: ");
         print_ins(ins);
-        //if (global_var[0]) printf(",  type: %lld, operand: %d", ((NullObj *)global_var[0])->type, operand_size);
         printf(", operand: %d\n", operand_count);
 #endif
         switch (ins->tag)
@@ -671,7 +671,7 @@ void interpret_bc(Program* p) {
                     if (*p != '~')
                         printf("%c", *p);
                     else
-                        printf("%lld", res[--cur]);
+                        printf("%" PRId64, res[--cur]);
                 }
                 push(tag_null());
 
@@ -770,8 +770,6 @@ void interpret_bc(Program* p) {
 
                 StringValue *name = vector_get(p->values, call_slot->name);
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
-
-                //printf("CALL_SLOT_OP receiver type: %lld\n", receiver->type);
 
                 switch (untag_type(receiver)) {
                     case Int: {
@@ -895,8 +893,6 @@ void interpret_bc(Program* p) {
                 int64_t var_idx = (int64_t)ht_get(&global_var_name, set_global_ins->name);
                 global_var[var_idx] = peek();
 
-                //printf("SET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
-
                 break;
             }
             case GET_GLOBAL_OP: {
@@ -904,8 +900,6 @@ void interpret_bc(Program* p) {
 
                 int64_t var_idx = (int64_t)ht_get(&global_var_name, get_global_ins->name);
                 push(global_var[var_idx]);
-
-                //printf("GET_GLOBAL_OP index: %d, type: %lld\n", var_idx, ((NullObj *)global_var[var_idx])->type);
 
                 break;
             }
@@ -986,7 +980,7 @@ void interpret_bc(Program* p) {
         ++sp->pc;
     }
 #ifdef STAT
-    fprintf(stderr, "Total halloc: %lld bytes, halloc for int: %lld bytes\n", total_halloc, total_halloc_int);
+    fprintf(stderr, "Total halloc: %" PRId64 " bytes, halloc for int: %" PRId64" bytes\n", total_halloc, total_halloc_int);
     fprintf(stderr, "Total GC time: %.4lfms\n", gc_time);
 #endif
     printf("\n");
