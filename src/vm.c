@@ -649,7 +649,12 @@ void interpret_bc(Program* p) {
             }
             case PRINTF_OP: {
                 PrintfIns* printf_ins = (PrintfIns *)ins;
-                int64_t* res = malloc(sizeof(int64_t) * (printf_ins->arity));
+                // HACK
+#ifdef _MSC_VER
+                int64_t res[1024];
+#else
+                int64_t res[printf_ins->arity];
+#endif
 
                 for (int i = 0; i < printf_ins->arity; i++) {
                     TaggedVal val = pop();
@@ -670,7 +675,6 @@ void interpret_bc(Program* p) {
                 }
                 push(tag_null());
 
-                free(res);
                 break;
             }
             case OBJECT_OP: {
@@ -689,7 +693,12 @@ void interpret_bc(Program* p) {
 
                 ObjectObj* obj = make_object_obj(class_type, NULL, numslots);
 
-                TaggedVal* args = malloc(sizeof(TaggedVal) * (numslots + 1));
+#ifdef _MSC_VER
+                TaggedVal args[1024];
+#else
+                TaggedVal args[numslots + 1];
+#endif
+
                 for (int i = 0; i < numslots + 1; i++) {
                     args[i] = pop();
                 }
@@ -705,8 +714,6 @@ void interpret_bc(Program* p) {
                 }
 
                 push(tag_object(obj));
-
-                free(args);
 
                 break;
             }
@@ -851,7 +858,12 @@ void interpret_bc(Program* p) {
 
                             push_frame(method->code, -1, method->nargs + method->nlocals + 1);
 
-                            TaggedVal *args = malloc(sizeof(TaggedVal) * call_slot->arity);
+                            //HACK
+#ifdef _MSC_VER
+                            TaggedVal args[1024];
+#else
+                            TaggedVal args[call_slot->arity];
+#endif
 
                             for (int i = 0; i < call_slot->arity; i++) {
                                 args[i] = pop();
@@ -860,7 +872,6 @@ void interpret_bc(Program* p) {
                             for (int i = 0; i < call_slot->arity; i++) {
                                 sp->slots[i] = args[call_slot->arity - 1 - i];
                             }
-                            free(args);
 
                             break;
                         }
@@ -940,7 +951,12 @@ void interpret_bc(Program* p) {
 
                 push_frame(method_val->code, -1, method_val->nargs + method_val->nlocals);
 
-                TaggedVal *args = malloc(sizeof(TaggedVal) * (call_ins->arity));
+                // HACK
+#ifdef _MSC_VER
+                TaggedVal args[1024];
+#else
+                TaggedVal args[call_slot->arity];
+#endif
 
                 for (int i = 0; i < call_ins->arity; i++) {
                     args[i] = pop();
@@ -949,8 +965,6 @@ void interpret_bc(Program* p) {
                 for (int i = 0; i < call_ins->arity; i++) {
                     sp->slots[i] = args[call_ins->arity - 1 - i];
                 }
-
-                free(args);
 
                 break;
             }
