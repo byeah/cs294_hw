@@ -955,7 +955,7 @@ void interpret_bc(Program* p) {
 #ifdef _MSC_VER
                 TaggedVal args[1024];
 #else
-                TaggedVal args[call_slot->arity];
+                TaggedVal args[call_ins->arity];
 #endif
 
                 for (int i = 0; i < call_ins->arity; i++) {
