@@ -12,7 +12,7 @@
 #endif
 
 //#define DEBUG
-#define STAT
+//#define STAT
 #ifdef WIN32
 
 #include <windows.h>
@@ -780,29 +780,44 @@ void interpret_bc(Program* p) {
                         i = pop();
 
                         assert(untag_type(j) == Int, "Error: Operand to Int must be Int.\n");
-
-                        if (strcmp(name->value, "add") == 0)
-                            push(i + j);
-                        else if (strcmp(name->value, "sub") == 0)
-                            push(i - j);
-                        else if (strcmp(name->value, "mul") == 0)
-                            push(i * (j >> 3));
-                        else if (strcmp(name->value, "div") == 0)
-                            push((i / j) << 3);
-                        else if (strcmp(name->value, "mod") == 0)
-                            push((i % j));
-                        else if (strcmp(name->value, "lt") == 0)
-                            push((i < j) ? tag_int(0) : tag_null());
-                        else if (strcmp(name->value, "gt") == 0)
-                            push((i > j) ? tag_int(0) : tag_null());
-                        else if (strcmp(name->value, "le") == 0)
-                            push((i <= j) ? tag_int(0) : tag_null());
-                        else if (strcmp(name->value, "ge") == 0)
-                            push((i >= j) ? tag_int(0) : tag_null());
-                        else if (strcmp(name->value, "eq") == 0)
-                            push((i == j) ? tag_int(0) : tag_null());
-                        else
-                            printf("Error: Operator %s not recognized.\n", name->value);
+                        
+                        uint16_t *op = name->value;
+                        switch (*op) {
+                            case 0x6461: // ad
+                                push(i + j);
+                                break;
+                            case 0x7573: // su
+                                push(i - j);
+                                break;
+                            case 0x756d: // mu
+                                push(i * (j >> 3));
+                                break;
+                            case 0x6964: // di
+                                push((i / j) << 3);
+                                break;
+                            case 0x6f6d: // mo
+                                push((i % j));
+                                break;
+                            case 0x746c: // lt
+                                push((i < j) ? tag_int(0) : tag_null());
+                                break;
+                            case 0x7467: // gt
+                                push((i > j) ? tag_int(0) : tag_null());
+                                break;
+                            case 0x656c: // le
+                                push((i <= j) ? tag_int(0) : tag_null());
+                                break;
+                            case 0x6567: // ge
+                                push((i >= j) ? tag_int(0) : tag_null());
+                                break;
+                            case 0x7165: // eq
+                                push((i == j) ? tag_int(0) : tag_null());
+                                break;
+                            default:
+                                printf("Error: Operator %s not recognized.\n", name->value);
+                                break;
+                        }
+                        
                         break;
                     }
 
@@ -819,26 +834,28 @@ void interpret_bc(Program* p) {
                             
                             TaggedVal args[3];
 
-                            if (strcmp(name->value, "length") == 0) {
-                                args[0] = pop();
-                                push(tag_int(array_length(aobj)));
+                            switch (name->value[0]) {
+                                case 'l': // length
+                                    args[0] = pop();
+                                    push(tag_int(array_length(aobj)));
+                                    break;
+                                case 's': // set
+                                    args[0] = pop();
+                                    args[1] = pop();
+                                    args[2] = pop();
+                                    array_set(aobj, untag_int(args[1]), args[0]);
+                                    push(tag_null());
+                                    break;
+                                case 'g': // get
+                                    args[0] = pop();
+                                    args[1] = pop();
+                                    push(array_get(aobj, untag_int(args[0])));
+                                    break;
+                                default:
+                                    printf("Error: Operator %s not recognized.\n", name->value);
+                                    exit(-1);
                             }
-                            else if (strcmp(name->value, "set") == 0) {
-                                args[0] = pop();
-                                args[1] = pop();
-                                args[2] = pop();
-                                array_set(aobj, untag_int(args[1]), args[0]);
-                                push(tag_null());
-                            }
-                            else if (strcmp(name->value, "get") == 0) {
-                                args[0] = pop();
-                                args[1] = pop();
-                                push(array_get(aobj, untag_int(args[0])));
-                            }
-                            else {
-                                printf("Error: Operator %s not recognized.\n", name->value);
-                                exit(-1);
-                            }
+
                             break;
                         }
                         else {
