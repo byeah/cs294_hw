@@ -606,31 +606,6 @@ TaggedVal peek() {
 }
 
 
-void drive(Program* p) {
-	int running = 1; 
-	while(running){
-		void*res = call_feeny(instruction_pointer);
-		//printf("Running: %d\n",((ByteIns*)res)->tag);
-		switch ((int)res){ 
-			case 0: //PROGRAM_FINISHED:
-				running = 0;
-				break;
-			case -1: //PERFORM_OP1 :
-				//perform_op1();
-#ifdef DEBUG
-				printf("GOTO\n");
-#endif
-				break;
-			default:
-				/*if (((ByteIns*)res)->tag == 15)
-					running = 0;
-				else*/
-				running = runSingleIns(res,p);
-				break;
-		}
-	}
-}
-
 char code_buffer[1024*1024];
 
 extern char label_code[];
@@ -641,6 +616,18 @@ extern char goto_code[];
 extern char goto_code_end[];
 extern char branch_code[];
 extern char branch_code_end[];
+extern char lit_code[];
+extern char lit_code_end[];
+extern char set_local_code[];
+extern char set_local_code_end[];
+extern char get_local_code[];
+extern char get_local_code_end[];
+extern char set_global_code[];
+extern char set_global_code_end[];
+extern char get_global_code[];
+extern char get_global_code_end[];
+extern char drop_code[];
+extern char drop_code_end[];
 ht_t label_table;
 char** func_code;
 
@@ -663,7 +650,7 @@ inline void fillhole(char* code,int l,int64_t old,int64_t new){
 int holes[65536];
 int holes_loc[65536];
 
-char* compile_assembly_code(Vector* code){
+char* compile_assembly_code(Program *p,Vector* code){
 #ifdef DIR
 	return;
 #endif
@@ -693,6 +680,66 @@ char* compile_assembly_code(Vector* code){
 				n+=l;
 				break;
 			}
+			case LIT_OP: {
+				int l = fillcode(code_buffer+n,lit_code,lit_code_end);
+				LitIns* lit_ins = (LitIns *)ins;
+                int index = lit_ins->idx;
+                Value* val = vector_get(p->values, index);
+                int64_t v=0;
+				if (val->tag == INT_VAL) {
+                    v = tag_int(((IntValue *)val)->value);
+                }
+                else if (val->tag == NULL_VAL) {
+                    v = tag_null();
+                }
+                else {
+                    assert(0, "Invalid object type for LIT.\n");
+                }
+                fillhole(code_buffer+n,l,0xcafebabecafebabe,v);
+				n+=l;
+				break;
+			}
+			case SET_LOCAL_OP: {
+                SetLocalIns *set_local_ins = (SetLocalIns *)ins;
+                int l = fillcode(code_buffer+n,set_local_code,set_local_code_end);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,set_local_ins->idx);
+                //sp->slots[set_local_ins->idx] = peek();
+                n+=l;
+                break;
+            }
+            case GET_LOCAL_OP: {
+                GetLocalIns *get_local_ins = (GetLocalIns *)ins;
+                int l = fillcode(code_buffer+n,get_local_code,get_local_code_end);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,get_local_ins->idx);
+                //push(sp->slots[get_local_ins->idx]);
+                n+=l;
+                break;
+            }
+            case SET_GLOBAL_OP: {
+                SetGlobalIns *set_global_ins = (SetGlobalIns *)ins;
+				int64_t var_idx = (int64_t)ht_get(&global_var_name, set_global_ins->name);
+                int l = fillcode(code_buffer+n,set_global_code,set_global_code_end);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,global_var+var_idx);
+                //global_var[var_idx] = peek();
+				n+=l;
+                break;
+            }
+            case GET_GLOBAL_OP: {
+                GetGlobalIns *get_global_ins = (GetGlobalIns *)ins;
+
+                int64_t var_idx = (int64_t)ht_get(&global_var_name, get_global_ins->name);
+                int l = fillcode(code_buffer+n,get_global_code,get_global_code_end);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,global_var+var_idx);
+                //push(global_var[var_idx]);
+				n+=l;
+                break;
+            }
+            case DROP_OP: {
+                int l = fillcode(code_buffer+n,drop_code,drop_code_end);
+                //pop();
+                n+=l;
+                break;
+            }
 			default:{
 				int l = fillcode(code_buffer+n,code_placeholder,code_placeholder_end);
 				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
@@ -736,6 +783,31 @@ char* compile_assembly_code(Vector* code){
 	return res; 
 }
 
+void drive(Program* p) {
+	int running = 1; 
+	while(running){
+		void*res = call_feeny(instruction_pointer);
+		//printf("Running: %d\n",((ByteIns*)res)->tag);
+		switch ((int)res){ 
+			case 0: //PROGRAM_FINISHED:
+				running = 0;
+				break;
+			case -1: //PERFORM_OP1 :
+				//perform_op1();
+#ifdef DEBUG
+				printf("GOTO/BRANCH\n");
+#endif
+				break;
+			default:
+				/*if (((ByteIns*)res)->tag == 15)
+					running = 0;
+				else*/
+				running = runSingleIns(res,p);
+				break;
+		}
+	}
+}
+
 void direct_interpret_bc(Program* p);
 
 void interpret_bc(Program* p) {
@@ -743,7 +815,7 @@ void interpret_bc(Program* p) {
     vm_init(p);
     func_code=malloc((p->values->size+1)*sizeof(char*));
     memset(func_code,0,(p->values->size+1)*sizeof(char*));
-    instruction_pointer = compile_assembly_code(sp->code);
+    instruction_pointer = compile_assembly_code(p,sp->code);
     drive(p);
 #else
 	direct_interpret_bc(p);
@@ -752,7 +824,7 @@ void interpret_bc(Program* p) {
 
 char* getAssemblyCode(Program *p,int method_id) {
 	if (func_code[method_id]==0){
-		func_code[method_id] = compile_assembly_code(((MethodValue*)vector_get(p->values,method_id))->code);
+		func_code[method_id] = compile_assembly_code(p,((MethodValue*)vector_get(p->values,method_id))->code);
 	}
 	return func_code[method_id];
 }
