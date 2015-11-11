@@ -660,6 +660,7 @@ Program* compile (ScopeStmt* stmt) {
     nullId = make_null();
     labelCnt = 0;
     compile_stmt(NULL,vector_get(pro->values, pro->entry),stmt);
+    addIns(vector_get(pro->values, pro->entry), make_return());
 //    print_prog(pro);    printf("\n");
     return pro;
 }
