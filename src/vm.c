@@ -162,7 +162,7 @@ typedef struct {
     TaggedVal varslots[0];
 } ObjectObj;
 
-static struct {
+struct {
     char* head;
     int64_t used;
     int64_t total;
@@ -182,6 +182,7 @@ typedef struct frame_t {
     struct frame_t *parent;
     Vector* code;
     int64_t pc;
+    char* IP;
     TaggedVal slots[0];
 } Frame;
 
@@ -192,15 +193,16 @@ double gc_time = 0.0;
 #endif
 
 static unsigned char *stack[1024 * 1024];
-static Frame* sp = NULL;
+Frame* sp = NULL;
 static Frame* next_sp = (Frame *)stack;
 
 static ht_t global_func_name;
 static ht_t global_var_name;
 static ht_t labels;
 
-static TaggedVal operand[1024] = { 0 };
-static int operand_count = 0;
+TaggedVal operand[1024] = { 0 };
+//static int operand_count = 0;
+TaggedVal* operand_top = operand;
 
 static TaggedVal global_var[128] = { 0 };
 static int global_var_count = 0;
@@ -279,7 +281,7 @@ void scan_root_set() {
         global_var[i] = post_gc_o;
     }
     // operand stack
-    for (int i = 0; i < operand_count; ++i) {
+    for (int i = 0; i < operand_top-operand; ++i) {
         TaggedVal o = operand[i];
         TaggedVal post_gc_o = get_post_gc_ptr(o);
 #ifdef DEBUG
@@ -448,12 +450,15 @@ void free_label(LabelAddr* label) {
     free(label);
 }
 
+char* instruction_pointer=NULL;
+
 static inline
 void push_frame(Vector* code, int pc, int num_slots) {
     next_sp->parent = sp;
     next_sp->code = code;
     next_sp->pc = pc;
-
+    if (sp!=NULL)
+	   	sp->IP = instruction_pointer;
     sp = next_sp;
     next_sp = (Frame *)((unsigned char *)next_sp + sizeof(Frame) + num_slots * sizeof(void *));
 
@@ -582,41 +587,161 @@ void vm_cleanup() {
 static inline
 void push(TaggedVal val) {
     //printf("Pushing val type: %d\n", untag_type(val));
-    operand[operand_count++] = val;
+    *(operand_top++) = val;
+    //operand[operand_count++] = val;
 }
 
 static inline
 TaggedVal pop() {
     //printf("Poping val type: %d\n", untag_type(operand[operand_count-1]));
-    return operand[--operand_count];
+    return *(--operand_top);
+    //return operand[--operand_count];
 }
 
 static inline
 TaggedVal peek() {
-    return operand[operand_count - 1];
+	return *(operand_top-1);
+    //return operand[operand_count - 1];
+}
+
+
+void drive(Program* p) {
+	int running = 1; 
+	while(running){
+		void*res = call_feeny(instruction_pointer);
+		//printf("Running: %d\n",((ByteIns*)res)->tag);
+		switch ((int)res){ 
+			case 0: //PROGRAM_FINISHED:
+				running = 0;
+				break;
+			case -1: //PERFORM_OP1 :
+				//perform_op1();
+				break;
+			default:
+				/*if (((ByteIns*)res)->tag == 15)
+					running = 0;
+				else*/
+				running = runSingleIns(res,p);
+				break;
+		}
+	}
+}
+
+char code_buffer[1024*1024];
+
+extern char label_code[];
+extern char label_code_end[];
+extern char code_placeholder[];
+extern char code_placeholder_end[];
+extern char goto_code[];
+extern char goto_code_end[];
+extern char branch_code[];
+extern char branch_code_end[];
+ht_t label_table;
+
+inline int fillcode(char* code,char*start,char*end){
+	int l = end - start;
+	memcpy(code,start,l);
+	return l;
+}
+
+inline void fillhole(char* code,int l,int64_t old,int64_t new){
+	for(int j=0;j<l-3;j++){
+		int64_t *p = (int64_t *)(code+j);
+		if (*p == old){
+			*p=new;
+			return;
+		}
+	}	
+}
+
+int holes[65536];
+int holes_loc[65536];
+
+char* compile_assembly_code(Vector* code){
+	int n=0;
+	int t=0;
+	ht_init(&label_table);
+	for(int i=0;i<code->size;i++){
+		ByteIns* ins = vector_get(code, i);
+		//printf("Compling: %d\n",ins->tag);
+		switch (ins->tag) {
+			case LABEL_OP: {
+				LabelIns* label_ins = (LabelIns *)ins;
+				ht_put(&label_table,label_ins->name,n);
+				break;
+			}
+			case GOTO_OP: {
+				int l = fillcode(code_buffer+n,label_code,label_code_end);
+				holes[t]=i;
+				holes_loc[t++]=n;
+				n+=l;
+				break;
+			}
+			case BRANCH_OP: {
+				int l = fillcode(code_buffer+n,branch_code,branch_code_end);
+				holes[t]=i;
+				holes_loc[t++]=n;
+				n+=l;
+				break;
+			}
+			default:{
+				int l = fillcode(code_buffer+n,code_placeholder,code_placeholder_end);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				n+=l;
+				break;
+			}
+		}
+	}
+	char* res = (char*) malloc(n+1);
+	for(int i=0;i<t;i++){
+		ByteIns* ins = vector_get(code, holes[i]);
+		switch (ins->tag) {
+			case GOTO_OP: {
+				GotoIns* goto_ins = (GotoIns *)ins;
+				int label = ht_get(&label_table,goto_ins->name);
+				int l = label_code_end - label_code;
+				fillhole(code_buffer+holes_loc[i],l,0xcafebabecafebabe,res+label);
+				//printf("Comping GOTO offset: %d\n",label);
+				break;
+			}
+			case BRANCH_OP: {
+                BranchIns* branch_ins = (BranchIns *)ins;
+				int label = ht_get(&label_table,branch_ins->name);
+				int l = branch_code_end - branch_code;
+				fillhole(code_buffer+holes_loc[i],l,0xcafebabecafebabe,res+label);
+				//printf("Comping BRANCH offset: %d\n",label);
+				break;
+			}
+			default:
+				break;
+		}
+			
+	}
+	//printf("Total: %d\n",n);
+	memcpy(res,code_buffer,n);
+	return res; 
 }
 
 void interpret_bc(Program* p) {
     vm_init(p);
+    instruction_pointer = compile_assembly_code(sp->code);
+    drive(p);
+}
+
+int runSingleIns(ByteIns* ins,Program* p){
 #ifdef DEBUG
-    //printf("Interpreting Bytecode Program:\n");
-    //print_prog(p);
+	if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP)
+		printf("R%d %d %d\n",ins->tag,operand_top,*operand_top);
 #endif
-    while (sp->pc < sp->code->size) {
-        ByteIns* ins = vector_get(sp->code, sp->pc);
-#ifdef DEBUG
-        //printf("Interpreting: ");
-        print_ins(ins);
-        printf(", operand: %d\n", operand_count);
-#endif
-        switch (ins->tag)
+	switch (ins->tag)
         {
             case LIT_OP: {
                 LitIns* lit_ins = (LitIns *)ins;
                 int index = lit_ins->idx;
                 Value* val = vector_get(p->values, index);
-
-                if (val->tag == INT_VAL) {
+				if (val->tag == INT_VAL) {
                     push(tag_int(((IntValue *)val)->value));
                 }
                 else if (val->tag == NULL_VAL) {
@@ -631,7 +756,7 @@ void interpret_bc(Program* p) {
                 //void* init_val = pop();
                 
                 // HACK
-                TaggedVal length = operand[operand_count-2];
+                TaggedVal length = *(operand_top-2);//operand[operand_count-2];
 
                 assert(untag_type(length) == Int, "Invalid length type for ARRAY.\n");
 
@@ -648,7 +773,7 @@ void interpret_bc(Program* p) {
                 break;
             }
             case PRINTF_OP: {
-                PrintfIns* printf_ins = (PrintfIns *)ins;
+            	PrintfIns* printf_ins = (PrintfIns *)ins;
                 // HACK
 #ifdef _MSC_VER
                 int64_t res[1024];
@@ -763,16 +888,16 @@ void interpret_bc(Program* p) {
                 break;
             }
             case CALL_SLOT_OP: {
-                CallSlotIns* call_slot = (CallSlotIns*)ins;
+            	CallSlotIns* call_slot = (CallSlotIns*)ins;
 
                 // HACK
-                TaggedVal receiver = operand[operand_count - call_slot->arity];
+                TaggedVal receiver = *(operand_top-call_slot->arity);//operand[operand_count - call_slot->arity];
 
-                StringValue *name = vector_get(p->values, call_slot->name);
+            	StringValue *name = vector_get(p->values, call_slot->name);
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
-
-                switch (untag_type(receiver)) {
+				switch (untag_type(receiver)) {
                     case Int: {
+                
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
 
                         TaggedVal i, j;
@@ -861,8 +986,7 @@ void interpret_bc(Program* p) {
                         else {
                             ObjectObj* oobj = (ObjectObj *) r_obj;
                             MethodValue* method = NULL;
-
-                            for (ObjectObj* obj_for_search = oobj; obj_for_search != NULL && method == NULL; obj_for_search = obj_for_search->parent) {
+							for (ObjectObj* obj_for_search = oobj; obj_for_search != NULL && method == NULL; obj_for_search = obj_for_search->parent) {
                                 ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
                                 method = find_method(p->values, class, call_slot->name);
                             }
@@ -872,7 +996,8 @@ void interpret_bc(Program* p) {
                             assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
 
                             push_frame(method->code, -1, method->nargs + method->nlocals + 1);
-
+							instruction_pointer = compile_assembly_code(method->code); 
+    
                             //HACK
 #ifdef _MSC_VER
                             TaggedVal args[1024];
@@ -955,13 +1080,16 @@ void interpret_bc(Program* p) {
                 break;
             }
             case CALL_OP: {
-                CallIns* call_ins = (CallIns *)ins;
-
+            	CallIns* call_ins = (CallIns *)ins;
+#ifdef DEBUG
+				printf("Call %d\n",call_ins->name);
+#endif                
                 MethodValue *method_val = ht_get(&global_func_name, call_ins->name);
                 assert(method_val && method_val->tag == METHOD_VAL, "Invalid method type for CALL_OP.\n");
 
                 push_frame(method_val->code, -1, method_val->nargs + method_val->nlocals);
-
+				instruction_pointer = compile_assembly_code(method_val->code); 
+    
                 // HACK
 #ifdef _MSC_VER
                 TaggedVal args[1024];
@@ -984,8 +1112,9 @@ void interpret_bc(Program* p) {
                 pop_frame();
 
                 if (sp == NULL) {
-                    return;
+                    return 0;
                 }
+                instruction_pointer = sp->IP;
 
                 break;
             }
@@ -994,6 +1123,28 @@ void interpret_bc(Program* p) {
                 break;
             }
         }
+#ifdef DEBUG
+	if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP)
+		printf("R%d %d %d\n",ins->tag,operand_top,*operand_top);
+#endif
+	return 1;
+}
+
+void direct_interpret_bc(Program* p) {
+    vm_init(p);
+#ifdef DEBUG
+    //printf("Interpreting Bytecode Program:\n");
+    //print_prog(p);
+#endif
+	while (sp->pc < sp->code->size) {
+        ByteIns* ins = vector_get(sp->code, sp->pc);
+#ifdef DEBUG
+        //printf("Interpreting: ");
+        print_ins(ins);
+        printf(", operand: %d\n", operand_top-operand);
+#endif
+        if (runSingleIns(ins,p)==0)
+        	break;
         ++sp->pc;
     }
 #ifdef STAT
@@ -1002,4 +1153,7 @@ void interpret_bc(Program* p) {
 #endif
     printf("\n");
 }
+
+
+
 
