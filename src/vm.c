@@ -616,6 +616,9 @@ void drive(Program* p) {
 				break;
 			case -1: //PERFORM_OP1 :
 				//perform_op1();
+#ifdef DEBUG
+				printf("GOTO\n");
+#endif
 				break;
 			default:
 				/*if (((ByteIns*)res)->tag == 15)
@@ -659,6 +662,9 @@ int holes[65536];
 int holes_loc[65536];
 
 char* compile_assembly_code(Vector* code){
+#ifdef DIR
+	return;
+#endif
 	int n=0;
 	int t=0;
 	ht_init(&label_table);
@@ -672,7 +678,7 @@ char* compile_assembly_code(Vector* code){
 				break;
 			}
 			case GOTO_OP: {
-				int l = fillcode(code_buffer+n,label_code,label_code_end);
+				int l = fillcode(code_buffer+n,goto_code,goto_code_end);
 				holes[t]=i;
 				holes_loc[t++]=n;
 				n+=l;
@@ -701,7 +707,9 @@ char* compile_assembly_code(Vector* code){
 			case GOTO_OP: {
 				GotoIns* goto_ins = (GotoIns *)ins;
 				int label = ht_get(&label_table,goto_ins->name);
-				int l = label_code_end - label_code;
+				int l = goto_code_end - goto_code;
+				fillhole(code_buffer+holes_loc[i],l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+holes_loc[i],l,0xbabecafebabecafe,-1);
 				fillhole(code_buffer+holes_loc[i],l,0xcafebabecafebabe,res+label);
 				//printf("Comping GOTO offset: %d\n",label);
 				break;
@@ -710,6 +718,8 @@ char* compile_assembly_code(Vector* code){
                 BranchIns* branch_ins = (BranchIns *)ins;
 				int label = ht_get(&label_table,branch_ins->name);
 				int l = branch_code_end - branch_code;
+				fillhole(code_buffer+holes_loc[i],l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+holes_loc[i],l,0xbabecafebabecafe,-1);
 				fillhole(code_buffer+holes_loc[i],l,0xcafebabecafebabe,res+label);
 				//printf("Comping BRANCH offset: %d\n",label);
 				break;
@@ -724,16 +734,26 @@ char* compile_assembly_code(Vector* code){
 	return res; 
 }
 
+void direct_interpret_bc(Program* p);
+
 void interpret_bc(Program* p) {
+#ifndef DIR
     vm_init(p);
     instruction_pointer = compile_assembly_code(sp->code);
     drive(p);
+#else
+	direct_interpret_bc(p);
+#endif
 }
 
 int runSingleIns(ByteIns* ins,Program* p){
 #ifdef DEBUG
-	if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP)
-		printf("R%d %d %d\n",ins->tag,operand_top,*operand_top);
+        //printf("Interpreting: ");
+    if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP && ins->tag!=GOTO_OP){
+    	print_ins(ins);
+    	printf(", operand: %d\n", operand_top-operand);
+		//printf("R%d %d\n",ins->tag,operand_top);//,*operand_top);
+    }
 #endif
 	switch (ins->tag)
         {
@@ -1124,8 +1144,8 @@ int runSingleIns(ByteIns* ins,Program* p){
             }
         }
 #ifdef DEBUG
-	if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP)
-		printf("R%d %d %d\n",ins->tag,operand_top,*operand_top);
+//	if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP && ins->tag!=GOTO_OP)
+//    	printf("R%d %d\n",ins->tag,operand_top);//,*operand_top);
 #endif
 	return 1;
 }
@@ -1138,11 +1158,6 @@ void direct_interpret_bc(Program* p) {
 #endif
 	while (sp->pc < sp->code->size) {
         ByteIns* ins = vector_get(sp->code, sp->pc);
-#ifdef DEBUG
-        //printf("Interpreting: ");
-        print_ins(ins);
-        printf(", operand: %d\n", operand_top-operand);
-#endif
         if (runSingleIns(ins,p)==0)
         	break;
         ++sp->pc;
