@@ -31,21 +31,32 @@ label_code_end:
 
 
 code_placeholder:
+	leaq code_placeholder_end(%rip), %rax
+	movq $0xcafebabecafebabe, %r8
+	movq %rax, (%r8)
+	movq $0xbabecafebabecafe, %rax
+	ret
+code_placeholder_end:
+
+goto_code:
 	leaq after_trap(%rip), %rax
 	movq $0xcafebabecafebabe, %r8
 	movq %rax, (%r8)
 	movq $0xbabecafebabecafe, %rax
 	ret
 after_trap:
-code_placeholder_end:
-
-goto_code:
 	movq $0xcafebabecafebabe, %r8
 	jmp *%r8
 goto_code_end:
 
 
 branch_code:
+	leaq after_trap2(%rip), %rax
+	movq $0xcafebabecafebabe, %r8
+	movq %rax, (%r8)
+	movq $0xbabecafebabecafe, %rax
+	ret
+after_trap2:
 	subq $8, %rdx
 	cmpq $2, (%rdx)
 	je branch_code_end
