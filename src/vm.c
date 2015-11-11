@@ -492,7 +492,7 @@ int find_slot_index(Vector *values, ClassValue* cvalue, int name) {
 }
 
 static
-MethodValue* find_method(Vector *values, ClassValue* cvalue, int name) {
+int find_method_id(Vector *values, ClassValue* cvalue, int name) {
     for (int i = 0; i < cvalue->slots->size; ++i) {
         int64_t value_index = (int64_t)vector_get(cvalue->slots, i);
         Value *value = vector_get(values, value_index);
@@ -500,10 +500,11 @@ MethodValue* find_method(Vector *values, ClassValue* cvalue, int name) {
         if (value->tag == METHOD_VAL) {
             MethodValue *mval = (MethodValue *)value;
             if (mval->name == name)
-                return mval;
+            	return value_index;
+                //return mval;
         }
     }
-    return NULL;
+    return -1;
 }
 
 static inline
@@ -527,7 +528,7 @@ void vm_init(Program* p) {
         switch (value->tag) {
             case METHOD_VAL: {
                 MethodValue* method_val = (MethodValue *)value;
-                ht_put(&global_func_name, method_val->name, method_val);
+                ht_put(&global_func_name, method_val->name, index);
                 break;
             }
             case SLOT_VAL: {
@@ -641,6 +642,7 @@ extern char goto_code_end[];
 extern char branch_code[];
 extern char branch_code_end[];
 ht_t label_table;
+char** func_code;
 
 inline int fillcode(char* code,char*start,char*end){
 	int l = end - start;
@@ -739,11 +741,20 @@ void direct_interpret_bc(Program* p);
 void interpret_bc(Program* p) {
 #ifndef DIR
     vm_init(p);
+    func_code=malloc((p->values->size+1)*sizeof(char*));
+    memset(func_code,0,(p->values->size+1)*sizeof(char*));
     instruction_pointer = compile_assembly_code(sp->code);
     drive(p);
 #else
 	direct_interpret_bc(p);
 #endif
+}
+
+char* getAssemblyCode(Program *p,int method_id) {
+	if (func_code[method_id]==0){
+		func_code[method_id] = compile_assembly_code(((MethodValue*)vector_get(p->values,method_id))->code);
+	}
+	return func_code[method_id];
 }
 
 int runSingleIns(ByteIns* ins,Program* p){
@@ -1006,9 +1017,14 @@ int runSingleIns(ByteIns* ins,Program* p){
                         else {
                             ObjectObj* oobj = (ObjectObj *) r_obj;
                             MethodValue* method = NULL;
+                            int method_id;
+                            char* code;
 							for (ObjectObj* obj_for_search = oobj; obj_for_search != NULL && method == NULL; obj_for_search = obj_for_search->parent) {
                                 ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
-                                method = find_method(p->values, class, call_slot->name);
+                                method_id = find_method_id(p->values, class, call_slot->name);
+                                if (method_id>=0){
+                                	method = vector_get(p->values,method_id);
+                                }
                             }
 
                             assert(method != NULL, "Could not find method for CALL_SLOT_OP.\n");
@@ -1016,8 +1032,8 @@ int runSingleIns(ByteIns* ins,Program* p){
                             assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
 
                             push_frame(method->code, -1, method->nargs + method->nlocals + 1);
-							instruction_pointer = compile_assembly_code(method->code); 
-    
+							instruction_pointer = getAssemblyCode(p,method_id);
+
                             //HACK
 #ifdef _MSC_VER
                             TaggedVal args[1024];
@@ -1104,12 +1120,13 @@ int runSingleIns(ByteIns* ins,Program* p){
 #ifdef DEBUG
 				printf("Call %d\n",call_ins->name);
 #endif                
-                MethodValue *method_val = ht_get(&global_func_name, call_ins->name);
+				int method_id = ht_get(&global_func_name, call_ins->name);
+				assert(method_id>=0,"Didn't find the method");
+                MethodValue *method_val = vector_get(p->values,method_id);
                 assert(method_val && method_val->tag == METHOD_VAL, "Invalid method type for CALL_OP.\n");
-
                 push_frame(method_val->code, -1, method_val->nargs + method_val->nlocals);
-				instruction_pointer = compile_assembly_code(method_val->code); 
-    
+				instruction_pointer = getAssemblyCode(p,method_id);
+
                 // HACK
 #ifdef _MSC_VER
                 TaggedVal args[1024];
