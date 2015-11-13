@@ -20,6 +20,12 @@
 	.globl get_global_code_end
 	.globl drop_code
 	.globl drop_code_end
+	.globl return_code
+	.globl return_code_end
+	.globl call_code
+	.globl call_code_end
+	.globl call_slot_code
+	.globl call_slot_code_end
 
 	
 call_feeny:
@@ -112,4 +118,136 @@ get_global_code_end:
 drop_code:
 	subq $8,%rdx
 drop_code_end:
+
+return_code:
+	movq $0xcafebabecafebabe, %r8
+	movq %rcx, (%r8)
+	movq (%rcx), %rcx
+	cmpq $0, %rcx
+	je finish_program
+	jmp 24(%rcx)
+finish_program:
+	movq $0, %rax
+	ret
+return_code_end:
+
+call_code:
+		
+call_code_end:
+
+
+call_slot_code:
+	movq $0xcafebabecafebabe, %r8
+	movq $0, %r9
+	leaq (%r9,%r8,8), %r10
+	movq %rdx, %r8
+	subq %r10, %r8
+	movq (%r8), %r9
+	movq %r9, %r10
+	andq $7, %r10
+	movq $0xcafebabecafebabe, %r11 
+	cmpq $0, %r10
+	je int
+	leaq call_slot_code_end(%rip), %rax
+	movq $0xcafebabecafebabe, %r8
+	movq %rax, (%r8)
+	movq $0xbabecafebabecafe, %rax
+	ret
+int:
+	mov (%r11), %ax
+	movq -8(%rdx), %r10
+	subq $8, %rdx
+	cmp $0x6461, %ax
+	je l1
+	cmp $0x7573, %ax
+	je l2
+	cmp $0x756d, %ax
+	je l3
+	cmp $0x6964, %ax
+	je l4
+	cmp $0x6f6d, %ax
+	je l5
+	cmp $0x746c, %ax
+	je l6
+	cmp $0x7467, %ax
+	je l7
+	cmp $0x656c, %ax
+	je l8
+	cmp $0x6567, %ax
+	je l9
+	cmp $0x7165, %ax
+	je l10
+l1:
+	addq %r10, %r9
+	movq %r9, -8(%rdx)
+	jmp call_slot_code_end
+l2:
+	subq %r10, %r9
+	movq %r9, -8(%rdx)
+	jmp call_slot_code_end
+l3:
+	shrq $3, %r10
+	imulq %r10, %r9
+	movq %r9, -8(%rdx)
+	jmp call_slot_code_end
+l4:
+	movq %rdx, %r11
+	xorq %rdx, %rdx
+	movq %r9, %rax
+	divq %r10
+	movq %r11, %rdx
+	shlq $3, %rax
+	movq %rax, -8(%rdx)
+	jmp call_slot_code_end
+l5:
+	movq %rdx, %r11
+	xorq %rdx, %rdx
+	movq %r9, %rax
+	idivq %r10
+	movq %rdx, -8(%r11)
+	movq %r11, %rdx
+	jmp call_slot_code_end
+l6:
+	cmpq %r10, %r9
+	jl lt
+	movq $2, -8(%rdx)
+	jmp call_slot_code_end
+lt:
+	movq $0, -8(%rdx)
+	jmp call_slot_code_end
+l7:
+	cmpq %r10, %r9
+	jg gt
+	movq $2, -8(%rdx)
+	jmp call_slot_code_end
+gt:
+	movq $0, -8(%rdx)
+	jmp call_slot_code_end
+l8:
+	cmpq %r10, %r9
+	jle le
+	movq $2, -8(%rdx)
+	jmp call_slot_code_end
+le:
+	movq $0, -8(%rdx)
+	jmp call_slot_code_end
+l9:
+	cmpq %r10, %r9
+	jge ge
+	movq $2, -8(%rdx)
+	jmp call_slot_code_end
+ge:
+	movq $0, -8(%rdx)
+	jmp call_slot_code_end
+l10:
+	cmpq %r10, %r9
+	je equal 
+	movq $2, -8(%rdx)
+	jmp call_slot_code_end
+equal:
+	movq $0, -8(%rdx)
+	jmp call_slot_code_end
+
+call_slot_code_end:
+
 

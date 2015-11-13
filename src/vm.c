@@ -462,8 +462,8 @@ void push_frame(Vector* code, int pc, int num_slots) {
     sp = next_sp;
     next_sp = (Frame *)((unsigned char *)next_sp + sizeof(Frame) + num_slots * sizeof(void *));
 
-    for (int i = 0; i < num_slots; ++i)
-        sp->slots[i] = 0;
+    //for (int i = 0; i < num_slots; ++i)
+    //    sp->slots[i] = 0;
 }
 
 static inline
@@ -628,6 +628,10 @@ extern char get_global_code[];
 extern char get_global_code_end[];
 extern char drop_code[];
 extern char drop_code_end[];
+extern char return_code[];
+extern char return_code_end[];
+extern char call_slot_code[];
+extern char call_slot_code_end[];
 ht_t label_table;
 char** func_code;
 
@@ -740,6 +744,24 @@ char* compile_assembly_code(Program *p,Vector* code){
                 n+=l;
                 break;
             }
+            case RETURN_OP: {
+                int l = fillcode(code_buffer+n,return_code,return_code_end);
+           		fillhole(code_buffer+n,l,0xcafebabecafebabe,&next_sp);
+        	 	n+=l;
+                break;
+            }
+            case CALL_SLOT_OP: {
+            	int l = fillcode(code_buffer+n,call_slot_code,call_slot_code_end);
+            	CallSlotIns* call_slot = (CallSlotIns*)ins;
+           		StringValue *name = vector_get(p->values, call_slot->name);
+                fillhole(code_buffer+n,l,0xcafebabecafebabe,call_slot->arity);
+ 				fillhole(code_buffer+n,l,0xcafebabecafebabe,name->value);
+ 				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				
+        	 	n+=l;
+                break;
+            }
 			default:{
 				int l = fillcode(code_buffer+n,code_placeholder,code_placeholder_end);
 				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
@@ -749,6 +771,7 @@ char* compile_assembly_code(Program *p,Vector* code){
 			}
 		}
 	}
+	assert(n<1024*1024,"Code too big to fit into buffer!");
 	char* res = (char*) malloc(n+1);
 	for(int i=0;i<t;i++){
 		ByteIns* ins = vector_get(code, holes[i]);
@@ -798,6 +821,11 @@ void drive(Program* p) {
 				printf("GOTO/BRANCH\n");
 #endif
 				break;
+			case -2:{//0x6461: {
+				printf("!!\n");
+				return;
+			}
+				
 			default:
 				/*if (((ByteIns*)res)->tag == 15)
 					running = 0;
@@ -883,26 +911,24 @@ int runSingleIns(ByteIns* ins,Program* p){
 #else
                 int64_t res[printf_ins->arity];
 #endif
-
-                for (int i = 0; i < printf_ins->arity; i++) {
+				for (int i = 0; i < printf_ins->arity; i++) {
                     TaggedVal val = pop();
                     assert(untag_type(val) == Int, "Invalid object type for PRINTF.\n");
                     res[i] = untag_int(val);
                 }
-
+				
                 int cur = printf_ins->arity;
 
                 StringValue *format = vector_get(p->values, printf_ins->format);
                 assert(format->tag == STRING_VAL, "Invalid object type for PRINTF_OP.\n");
-
-                for (char* p = format->value; *p && cur >= 0; p++) {
+				for (char* p = format->value; *p && cur >= 0; p++) {
                     if (*p != '~')
                         printf("%c", *p);
                     else
                         printf("%" PRId64, res[--cur]);
                 }
                 push(tag_null());
-
+		
                 break;
             }
             case OBJECT_OP: {
