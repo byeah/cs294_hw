@@ -12,7 +12,7 @@
 #endif
 
 //#define DEBUG
-//#define STAT
+#define STAT
 #ifdef WIN32
 
 #include <windows.h>
@@ -186,12 +186,6 @@ typedef struct frame_t {
     TaggedVal slots[0];
 } Frame;
 
-#ifdef STAT
-int64_t total_halloc = 0;
-int64_t total_halloc_int = 0;
-double gc_time = 0.0;
-#endif
-
 static unsigned char *stack[1024 * 1024];
 Frame* sp = NULL;
 static Frame* next_sp = (Frame *)stack;
@@ -304,12 +298,6 @@ void scan_root_set() {
 
 static inline
 void garbage_collector() {
-#ifdef STAT
-    TIME_T t1, t2;
-    FREQ_T freq;
-    FREQ(freq);
-    TIME(t1);
-#endif
 #ifdef DEBUG
     fprintf(stderr, "Heap: %llx - %llx.\n", heap.head, heap.head + heap.total);
     fprintf(stderr, "Free: %llx - %llx.\n", freespace.head, freespace.head + freespace.total);
@@ -373,18 +361,10 @@ void garbage_collector() {
     freespace.head = tmp;
     freespace.used = 0;
     freespace.total = tmp_size;
-#ifdef STAT
-    TIME(t2);
-    gc_time += ELASPED_TIME(t1, t2, freq);
-#endif
 }
 
 static inline
 void* halloc(int64_t nbytes) {
-#ifdef STAT
-    total_halloc += nbytes;
-#endif
-
     if (heap.used + nbytes > heap.total) {
         garbage_collector();
     }
@@ -563,8 +543,6 @@ void vm_init(Program* p) {
     }
 
     // preprocess labels
-    
-
     for (int i = 0; i < p->values->size; ++i) {
         Value* val = vector_get(p->values, i);
         if (val->tag != METHOD_VAL)
@@ -655,7 +633,7 @@ int holes[65536];
 int holes_loc[65536];
 
 char* compile_assembly_code(Program *p,Vector* code){
-#ifdef DIR
+#ifdef JIT
 	return;
 #endif
 	int n=0;
@@ -809,7 +787,7 @@ char* compile_assembly_code(Program *p,Vector* code){
 void drive(Program* p) {
 	int running = 1; 
 	while(running){
-		void*res = call_feeny(instruction_pointer);
+		void *res = call_feeny(instruction_pointer);
 		//printf("Running: %d\n",((ByteIns*)res)->tag);
 		switch ((int)res){ 
 			case 0: //PROGRAM_FINISHED:
@@ -839,11 +817,26 @@ void drive(Program* p) {
 void direct_interpret_bc(Program* p);
 
 void interpret_bc(Program* p) {
-#ifndef DIR
+#ifndef JIT
     vm_init(p);
-    func_code=malloc((p->values->size+1)*sizeof(char*));
-    memset(func_code,0,(p->values->size+1)*sizeof(char*));
-    instruction_pointer = compile_assembly_code(p,sp->code);
+    func_code = malloc((p->values->size+1) * sizeof(char *));
+    memset(func_code, 0, (p->values->size+1) * sizeof(char *));
+
+#ifdef STAT
+    TIME_T t1, t2;
+    FREQ_T freq;
+    FREQ(freq);
+    TIME(t1);
+#endif
+
+    instruction_pointer = compile_assembly_code(p, sp->code);
+    
+#ifdef STAT
+    TIME(t2);
+    double codegen_time = ELASPED_TIME(t1, t2, freq);
+    fprintf(stderr, "JIT Time: %.4lf ms.\n", codegen_time);
+#endif
+
     drive(p);
 #else
 	direct_interpret_bc(p);
@@ -1116,7 +1109,7 @@ int runSingleIns(ByteIns* ins,Program* p){
                             ObjectObj* oobj = (ObjectObj *) r_obj;
                             MethodValue* method = NULL;
                             int method_id;
-                            char* code;
+
 							for (ObjectObj* obj_for_search = oobj; obj_for_search != NULL && method == NULL; obj_for_search = obj_for_search->parent) {
                                 ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
                                 method_id = find_method_id(p->values, class, call_slot->name);
@@ -1277,10 +1270,6 @@ void direct_interpret_bc(Program* p) {
         	break;
         ++sp->pc;
     }
-#ifdef STAT
-    fprintf(stderr, "Total halloc: %" PRId64 " bytes, halloc for int: %" PRId64" bytes\n", total_halloc, total_halloc_int);
-    fprintf(stderr, "Total GC time: %.4lfms\n", gc_time);
-#endif
     printf("\n");
 }
 

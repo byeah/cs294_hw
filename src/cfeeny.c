@@ -29,12 +29,6 @@
 
 #endif
 
-#ifdef DEBUG
-
-static double compile_time = 0.0;
-static double interpret_time = 0.0;
-
-#endif
 #endif
 
 int main (int argc, char** argvs) {
@@ -48,33 +42,25 @@ int main (int argc, char** argvs) {
   char* filename = argvs[1];
   ScopeStmt* stmt = read_ast(filename);
 
+  //Compile to bytecode
+  Program* program = compile(stmt);
+
+  //Read in bytecode
+  //Program* program = load_bytecode(argvs[1]);
+  //Interpret bytecode
 #ifdef DEBUG
   TIME_T t1, t2;
   FREQ_T freq;
-
   FREQ(freq);
   TIME(t1);
 #endif
 
-  //Compile to bytecode
-  Program* program = compile(stmt);
-
-#ifdef DEBUG
-  TIME(t2);
-  compile_time += ELASPED_TIME(t1, t2, freq);
-
-  TIME(t1);
-#endif
-  //Read in bytecode
-  //Program* program = load_bytecode(argvs[1]);
-  //Interpret bytecode
   interpret_bc(program);
 
 #ifdef DEBUG
   TIME(t2);
-  interpret_time += ELASPED_TIME(t1, t2, freq);
-  fprintf(stderr, "compile: %f ms, interpret: %f ms, ratio: %f%% \n",
-      compile_time, interpret_time, compile_time / (compile_time + interpret_time) * 100);
+  double interp_time = ELASPED_TIME(t1, t2, freq);
+  fprintf(stderr, "Interpret Time: %.4lf ms.\n", interp_time);
 #endif
 
 }
