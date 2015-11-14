@@ -13,6 +13,7 @@
 
 //#define DEBUG
 #define STAT
+#define JIT
 #ifdef WIN32
 
 #include <windows.h>
@@ -304,6 +305,7 @@ void garbage_collector() {
     fprintf(stderr, "Scan root set.\n");
 #endif
     // root set
+    printf("GC\n");
     scan_root_set();
 #ifdef DEBUG
     fprintf(stderr, "Scan free space.\n");
@@ -442,8 +444,8 @@ void push_frame(Vector* code, int pc, int num_slots) {
     sp = next_sp;
     next_sp = (Frame *)((unsigned char *)next_sp + sizeof(Frame) + num_slots * sizeof(void *));
 
-    //for (int i = 0; i < num_slots; ++i)
-    //    sp->slots[i] = 0;
+    for (int i = 0; i < num_slots; ++i)
+        sp->slots[i] = 0;
 }
 
 static inline
@@ -487,6 +489,10 @@ int find_method_id(Vector *values, ClassValue* cvalue, int name) {
     return -1;
 }
 
+char* compile_assembly_code(Program *p,Vector* code,int slots);
+char** func_code;
+
+
 static inline
 void vm_init(Program* p) {
     // init heap and stack
@@ -509,6 +515,7 @@ void vm_init(Program* p) {
             case METHOD_VAL: {
                 MethodValue* method_val = (MethodValue *)value;
                 ht_put(&global_func_name, method_val->name, index);
+                //func_code[index] = compile_assembly_code(p,method_val->code,method_val->nargs);
                 break;
             }
             case SLOT_VAL: {
@@ -608,10 +615,15 @@ extern char drop_code[];
 extern char drop_code_end[];
 extern char return_code[];
 extern char return_code_end[];
+extern char call_code[];
+extern char call_code_end[];
 extern char call_slot_code[];
 extern char call_slot_code_end[];
+extern char array_code[];
+extern char array_code_end[];
+extern char call_init_code[];
+extern char call_init_code_end[];
 ht_t label_table;
-char** func_code;
 
 inline int fillcode(char* code,char*start,char*end){
 	int l = end - start;
@@ -631,16 +643,36 @@ inline void fillhole(char* code,int l,int64_t old,int64_t new){
 
 int holes[65536];
 int holes_loc[65536];
+int debugV[1024];
+double codegen_time=0;
 
-char* compile_assembly_code(Program *p,Vector* code){
-#ifdef JIT
+char* compile_assembly_code(Program *p,Vector* code,int slots){
+#ifndef JIT
 	return;
+#endif
+#ifdef STAT
+    TIME_T t1, t2;
+    FREQ_T freq;
+    FREQ(freq);
+    TIME(t1);
 #endif
 	int n=0;
 	int t=0;
 	ht_init(&label_table);
+	for(int i=0;i<slots;i++) {
+        int l = fillcode(code_buffer+n,call_init_code,call_init_code_end);
+   		fillhole(code_buffer+n,l,0xcafebabecafebabe,(slots-i-1)*8);
+	 	n+=l;
+	}
 	for(int i=0;i<code->size;i++){
 		ByteIns* ins = vector_get(code, i);
+		/*if (ins->tag!=CALL_OP)
+		{		int l = fillcode(code_buffer+n,code_placeholder,code_placeholder_end);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				n+=l;
+				continue;
+			}*/
 		//printf("Compling: %d\n",ins->tag);
 		switch (ins->tag) {
 			case LABEL_OP: {
@@ -728,6 +760,21 @@ char* compile_assembly_code(Program *p,Vector* code){
         	 	n+=l;
                 break;
             }
+            case CALL_OP: {
+            	int l = fillcode(code_buffer+n,call_code,call_code_end);
+           		CallIns* call_ins = (CallIns *)ins;
+           		int method_id = ht_get(&global_func_name, call_ins->name);
+				MethodValue *method_val = vector_get(p->values,method_id);
+                int64_t offset = sizeof(Frame) + sizeof(void*) * (method_val->nargs + method_val->nlocals);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,func_code+method_id);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,&next_sp);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,offset);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,debugV);
+				n+=l;
+				break;
+            }
             case CALL_SLOT_OP: {
             	int l = fillcode(code_buffer+n,call_slot_code,call_slot_code_end);
             	CallSlotIns* call_slot = (CallSlotIns*)ins;
@@ -739,6 +786,14 @@ char* compile_assembly_code(Program *p,Vector* code){
 				
         	 	n+=l;
                 break;
+            }
+            case ARRAY_OP: {
+            	int l = fillcode(code_buffer+n,array_code,array_code_end);
+            	fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				n+=l;
+            	break;
+            	
             }
 			default:{
 				int l = fillcode(code_buffer+n,code_placeholder,code_placeholder_end);
@@ -781,12 +836,17 @@ char* compile_assembly_code(Program *p,Vector* code){
 	}
 	//printf("Total: %d\n",n);
 	memcpy(res,code_buffer,n);
+#ifdef STAT
+    TIME(t2);
+    codegen_time += ELASPED_TIME(t1, t2, freq);
+#endif
 	return res; 
 }
 
 void drive(Program* p) {
 	int running = 1; 
 	while(running){
+		//printf("%d\n",instruction_pointer);
 		void *res = call_feeny(instruction_pointer);
 		//printf("Running: %d\n",((ByteIns*)res)->tag);
 		switch ((int)res){ 
@@ -800,7 +860,13 @@ void drive(Program* p) {
 #endif
 				break;
 			case -2:{//0x6461: {
-				printf("!!\n");
+				printf("!!!\n");
+				printf("%d\n",sp);
+				printf("%d\n",sp->parent->IP);
+				printf("%d\n",sp->IP);
+				printf("%d\n",next_sp);
+				printf("%d\n",debugV[0]);
+				printf("%d\n",instruction_pointer);
 				return;
 			}
 				
@@ -808,6 +874,7 @@ void drive(Program* p) {
 				/*if (((ByteIns*)res)->tag == 15)
 					running = 0;
 				else*/
+				//printf("%d\n",instruction_pointer);
 				running = runSingleIns(res,p);
 				break;
 		}
@@ -817,35 +884,24 @@ void drive(Program* p) {
 void direct_interpret_bc(Program* p);
 
 void interpret_bc(Program* p) {
-#ifndef JIT
-    vm_init(p);
+#ifdef JIT
     func_code = malloc((p->values->size+1) * sizeof(char *));
     memset(func_code, 0, (p->values->size+1) * sizeof(char *));
+    vm_init(p);
 
-#ifdef STAT
-    TIME_T t1, t2;
-    FREQ_T freq;
-    FREQ(freq);
-    TIME(t1);
-#endif
-
-    instruction_pointer = compile_assembly_code(p, sp->code);
+    instruction_pointer = compile_assembly_code(p, sp->code,0);
     
-#ifdef STAT
-    TIME(t2);
-    double codegen_time = ELASPED_TIME(t1, t2, freq);
-    fprintf(stderr, "JIT Time: %.4lf ms.\n", codegen_time);
-#endif
-
     drive(p);
 #else
 	direct_interpret_bc(p);
 #endif
+    fprintf(stderr, "JIT Time: %.4lf ms.\n", codegen_time);
 }
 
-char* getAssemblyCode(Program *p,int method_id) {
+char* getAssemblyCode(Program *p,int method_id,int slots) {
 	if (func_code[method_id]==0){
-		func_code[method_id] = compile_assembly_code(p,((MethodValue*)vector_get(p->values,method_id))->code);
+		MethodValue* method = (MethodValue*)vector_get(p->values,method_id);
+		func_code[method_id] = compile_assembly_code(p,method->code,slots);
 	}
 	return func_code[method_id];
 }
@@ -856,6 +912,7 @@ int runSingleIns(ByteIns* ins,Program* p){
     if (ins->tag!=LABEL_OP && ins->tag!=BRANCH_OP && ins->tag!=GOTO_OP){
     	print_ins(ins);
     	printf(", operand: %d\n", operand_top-operand);
+    	printf("Heap used: %d\n",heap.used);
 		//printf("R%d %d\n",ins->tag,operand_top);//,*operand_top);
     }
 #endif
@@ -1017,7 +1074,7 @@ int runSingleIns(ByteIns* ins,Program* p){
 
             	StringValue *name = vector_get(p->values, call_slot->name);
                 assert(name->tag == STRING_VAL, "Invalid string type for CALL_SLOT_OP.\n");
-				switch (untag_type(receiver)) {
+            	switch (untag_type(receiver)) {
                     case Int: {
                 
                         assert(call_slot->arity == 2, "Invalid parameter number for CALL_Slot_OP.\n");
@@ -1076,7 +1133,7 @@ int runSingleIns(ByteIns* ins,Program* p){
                     case Object: {
                         Obj* r_obj = untag_object(receiver);
                         if (r_obj->type == Array) {
-                            ArrayObj* aobj = (ArrayObj*) r_obj;
+                        	ArrayObj* aobj = (ArrayObj*) r_obj;
                             assert(call_slot->arity <= 3, "Invalid parameter number for CALL_Slot_OP.\n");
                             
                             TaggedVal args[3];
@@ -1123,7 +1180,7 @@ int runSingleIns(ByteIns* ins,Program* p){
                             assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
 
                             push_frame(method->code, -1, method->nargs + method->nlocals + 1);
-							instruction_pointer = getAssemblyCode(p,method_id);
+							instruction_pointer = getAssemblyCode(p,method_id,call_slot->arity);
 
                             //HACK
 #ifdef _MSC_VER
@@ -1132,13 +1189,13 @@ int runSingleIns(ByteIns* ins,Program* p){
                             TaggedVal args[call_slot->arity];
 #endif
 
-                            for (int i = 0; i < call_slot->arity; i++) {
+                            /*for (int i = 0; i < call_slot->arity; i++) {
                                 args[i] = pop();
                             }
 
                             for (int i = 0; i < call_slot->arity; i++) {
                                 sp->slots[i] = args[call_slot->arity - 1 - i];
-                            }
+                            }*/
 
                             break;
                         }
@@ -1216,7 +1273,7 @@ int runSingleIns(ByteIns* ins,Program* p){
                 MethodValue *method_val = vector_get(p->values,method_id);
                 assert(method_val && method_val->tag == METHOD_VAL, "Invalid method type for CALL_OP.\n");
                 push_frame(method_val->code, -1, method_val->nargs + method_val->nlocals);
-				instruction_pointer = getAssemblyCode(p,method_id);
+				instruction_pointer = getAssemblyCode(p,method_id,call_ins->arity);
 
                 // HACK
 #ifdef _MSC_VER
@@ -1225,13 +1282,13 @@ int runSingleIns(ByteIns* ins,Program* p){
                 TaggedVal args[call_ins->arity];
 #endif
 
-                for (int i = 0; i < call_ins->arity; i++) {
+                /*for (int i = 0; i < call_ins->arity; i++) {
                     args[i] = pop();
                 }
 
                 for (int i = 0; i < call_ins->arity; i++) {
                     sp->slots[i] = args[call_ins->arity - 1 - i];
-                }
+                }*/
 
                 break;
             }

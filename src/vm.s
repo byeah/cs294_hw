@@ -26,20 +26,26 @@
 	.globl call_code_end
 	.globl call_slot_code
 	.globl call_slot_code_end
+	.globl array_code
+	.globl array_code_end
+	.globl call_init_code
+	.globl call_init_code_end
 
 	
 call_feeny:
 	movq %rdi, %rax
 	movq heap(%rip), %rdi 
-	movq heap(%rip), %rsi 
+	leaq heap, %r8
+	movq 8(%r8), %rsi 
 	movq operand_top(%rip), %rdx 
 	movq sp(%rip), %rcx 
 	call *%rax
-	movq %rsi, heap(%rip) 
+	movq %rdi, heap(%rip) 
+	leaq heap, %r8
+	movq %rsi, 8(%r8)
 	movq %rdx, operand_top(%rip) 
 	movq %rcx, sp(%rip) 
 	ret
-
 
 label_code:
 
@@ -125,6 +131,7 @@ return_code:
 	movq (%rcx), %rcx
 	cmpq $0, %rcx
 	je finish_program
+	movq $-2,%rax
 	jmp 24(%rcx)
 finish_program:
 	movq $0, %rax
@@ -132,7 +139,26 @@ finish_program:
 return_code_end:
 
 call_code:
-		
+	movq $0xcafebabecafebabe, %r8
+	movq (%r8), %r9
+	cmpq $0,%r9
+	jne call_func
+	leaq call_code_end(%rip), %rax
+	movq $0xcafebabecafebabe, %r8
+	movq %rax, (%r8)
+	movq $0xbabecafebabecafe, %rax
+	ret
+call_func:
+	movq $0xcafebabecafebabe, %r8
+	movq (%r8),%r10
+	movq %rcx, (%r10)
+	leaq call_code_end(%rip), %r11
+	movq %r11, 24(%rcx)
+	movq %r10,%rcx
+	movq $0xcafebabecafebabe, %r11
+	addq %r11, %r10
+	movq %r10, (%r8)
+	jmp %r9
 call_code_end:
 
 
@@ -194,7 +220,8 @@ l4:
 	movq %rdx, %r11
 	xorq %rdx, %rdx
 	movq %r9, %rax
-	divq %r10
+	cqo
+	idivq %r10
 	movq %r11, %rdx
 	shlq $3, %rax
 	movq %rax, -8(%rdx)
@@ -203,6 +230,7 @@ l5:
 	movq %rdx, %r11
 	xorq %rdx, %rdx
 	movq %r9, %rax
+	cqo
 	idivq %r10
 	movq %rdx, -8(%r11)
 	movq %r11, %rdx
@@ -247,7 +275,76 @@ l10:
 equal:
 	movq $0, -8(%rdx)
 	jmp call_slot_code_end
-
 call_slot_code_end:
+
+array_code:
+	movq -16(%rdx), %r8
+	shrq $3, %r8
+	movq $16,%r10
+	leaq (%r10,%r8,8), %r9
+	movq %rsi, %r10
+	addq %r10,%r9
+	cmpq $0x100000, %r9
+	jle alloc_array
+	leaq array_code_end(%rip), %rax
+	movq $0xcafebabecafebabe, %r8
+	movq %rax, (%r8)
+	movq $0xbabecafebabecafe, %rax
+	ret
+alloc_array:
+	movq -8(%rdx), %r9
+	movq $2, (%rdi,%rsi)
+	movq %r8,8(%rdi,%rsi)
+	leaq (%rdi,%rsi), %r10
+	incq %r10
+	subq $8, %rdx
+	movq %r10, -8(%rdx)
+	movq $0, %r10
+	addq $16, %rsi
+for_array:
+	cmpq %r8,%r10
+	jge array_code_end
+	movq %r9,(%rdi,%rsi)
+	incq %r10
+	addq $8,%rsi
+	jmp for_array	
+array_code_end:
+
+call_init_code:
+	movq -8(%rdx), %r8
+	subq $8, %rdx
+	movq $0xcafebabecafebabe, %r9
+	movq %r8, 32(%rcx,%r9)
+call_init_code_end:
+
+object_code:
+	
+
+	movq -16(%rdx), %r8
+	shrq $3, %r8
+	movq $16,%r10
+	leaq (%r10,%r8,8), %r9
+	movq %rsi, %r10
+	addq %r10,%r9
+	cmpq $0x100000, %r9
+	jle alloc_array
+	leaq array_code_end(%rip), %rax
+	movq $0xcafebabecafebabe, %r8
+	movq %rax, (%r8)
+	movq $0xbabecafebabecafe, %rax
+	ret
+alloc_object:
+	movq -8(%rdx), %r9
+	movq $2, (%rdi,%rsi)
+	movq %r8,8(%rdi,%rsi)
+	leaq (%rdi,%rsi), %r10
+	incq %r10
+	subq $8, %rdx
+	movq %r10, -8(%rdx)
+	movq $0, %r10
+	addq $16, %rsi
+
+object_code_end:
+
 
 
