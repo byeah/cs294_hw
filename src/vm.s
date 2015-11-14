@@ -30,7 +30,8 @@
 	.globl array_code_end
 	.globl call_init_code
 	.globl call_init_code_end
-
+	.globl object_code
+	.globl object_code_end
 	
 call_feeny:
 	movq %rdi, %rax
@@ -318,32 +319,57 @@ call_init_code:
 call_init_code_end:
 
 object_code:
-	
-
-	movq -16(%rdx), %r8
-	shrq $3, %r8
+	movq $0xcafebabecafebabe, %r8  
 	movq $16,%r10
-	leaq (%r10,%r8,8), %r9
+	leaq (%r10,%r8,8), %r9		  
 	movq %rsi, %r10
 	addq %r10,%r9
 	cmpq $0x100000, %r9
-	jle alloc_array
-	leaq array_code_end(%rip), %rax
+	jle alloc_object
+	leaq object_code_end(%rip), %rax
 	movq $0xcafebabecafebabe, %r8
 	movq %rax, (%r8)
 	movq $0xbabecafebabecafe, %rax
 	ret
 alloc_object:
-	movq -8(%rdx), %r9
-	movq $2, (%rdi,%rsi)
-	movq %r8,8(%rdi,%rsi)
+	movq $0xcafebabecafebabe,%r9 
+	movq %r9, (%rdi,%rsi)
+	movq $0xcafebabecafebabe,%r9 
+	incq %r8
+	movq $0,%r10
+	
+for_object1:
+	cmpq %r8,%r10
+	jge end_for
+	movq -8(%rdx), %r11
+	subq $8, %rdx
+	movq %r11, (%r9,%r10,8)
+	incq %r10
+	jmp for_object1
+end_for:
+	cmpq $2, %r11
+	je endif
+	decq %r11
+endif:
+	movq %r11, 8(%rdi,%rsi)
 	leaq (%rdi,%rsi), %r10
 	incq %r10
-	subq $8, %rdx
-	movq %r10, -8(%rdx)
-	movq $0, %r10
+	addq $8,%rdx
+	movq %r10, -8(%rdx) 
 	addq $16, %rsi
-
+	decq %r8
+	movq $0, %r10
+	leaq -8(%r9,%r8,8),%r9
+for_object2:
+	cmpq %r8,%r10
+	jge object_code_end
+	movq (%r9), %r11
+	movq %r11,(%rdi,%rsi)
+	incq %r10
+	addq $8,%rsi
+	subq $8,%r9
+	jmp for_object2
+	
 object_code_end:
 
 

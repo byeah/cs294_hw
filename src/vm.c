@@ -489,8 +489,7 @@ int find_method_id(Vector *values, ClassValue* cvalue, int name) {
     return -1;
 }
 
-char* compile_assembly_code(Program *p,Vector* code,int slots);
-char** func_code;
+//char* compile_assembly_code(Program *p,Vector* code,int slots);
 
 
 static inline
@@ -623,7 +622,11 @@ extern char array_code[];
 extern char array_code_end[];
 extern char call_init_code[];
 extern char call_init_code_end[];
+extern char object_code[];
+extern char object_code_end[];
 ht_t label_table;
+char** func_code;
+
 
 inline int fillcode(char* code,char*start,char*end){
 	int l = end - start;
@@ -644,6 +647,7 @@ inline void fillhole(char* code,int l,int64_t old,int64_t new){
 int holes[65536];
 int holes_loc[65536];
 int debugV[1024];
+int64_t object_buffer[1024];
 double codegen_time=0;
 
 char* compile_assembly_code(Program *p,Vector* code,int slots){
@@ -791,6 +795,26 @@ char* compile_assembly_code(Program *p,Vector* code,int slots){
             	int l = fillcode(code_buffer+n,array_code,array_code_end);
             	fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
 				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				n+=l;
+            	break;
+            	
+            }
+            case OBJECT_OP:{
+            	int l = fillcode(code_buffer+n,object_code,object_code_end);
+            	ObjectIns* obj_ins = (ObjectIns*)ins;
+                int64_t class_type = obj_ins->class + 3;
+                int numslots = -1;
+                for (int i = 0; i < class_table_count; ++i) {
+                    if (class_table[i].type == class_type) {
+                        numslots = class_table[i].varslot_count;
+                        break;
+                    }
+                }
+            	fillhole(code_buffer+n,l,0xcafebabecafebabe,numslots);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,&instruction_pointer);
+				fillhole(code_buffer+n,l,0xbabecafebabecafe,ins);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,class_type);
+				fillhole(code_buffer+n,l,0xcafebabecafebabe,&object_buffer);
 				n+=l;
             	break;
             	
