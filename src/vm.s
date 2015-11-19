@@ -174,30 +174,30 @@ call_slot_code:
 	andq $7, %r10
 	movq $0xcafebabecafebabe, %r11 # name->value
 	movq $0xcafebabecafebabe, %r8 # &instruction_pointer
-  cmpq $0, %r10 # (receiver & 7 == 0?)
+	cmpq $0, %r10 # (receiver & 7 == 0?)
 	je int
 
 	cmpq $2, %r9 # (receiver == 2?)
 	je call_slot_trap
 	
-  leaq -1(%r9), %r10 # (%r10: receiver - 1)
+	leaq -1(%r9), %r10 # (%r10: receiver - 1)
 	cmpq $2, (%r10) # r_obj->type == Array ?
-  je array
+	je array
 
-  movq (%r10), %r9
-  cmpq %r9, receiver_type_cache(%rip)
-  jne call_slot_trap
+	movq (%r10), %r9
+	cmpq %r9, receiver_type_cache(%rip)
+	jne call_slot_trap
 
-  leaq call_slot_code_end(%rip), %rax # call_slot_code_end
-  movq %rax, (%r8) # instruction_pointer
-  movq method_address_cache(%rip), %r9
-  call *%r9
-  jmp call_slot_code_end
+	leaq call_slot_code_end(%rip), %rax # call_slot_code_end
+	movq %rax, (%r8) # instruction_pointer
+	movq method_address_cache(%rip), %r9
+	call *%r9
+	jmp call_slot_code_end
 
 call_slot_trap:
 	leaq call_slot_code_end(%rip), %rax # call_slot_code_end
-  movq %rax, (%r8) # instruction_pointer
-  movq $0xbabecafebabecafe, %rax # return rax
+	movq %rax, (%r8) # instruction_pointer
+	movq $0xbabecafebabecafe, %rax # return rax
 	ret
 	
 array:
@@ -216,22 +216,22 @@ l11:
 	jmp call_slot_code_end
 l12:
 	subq $16, %rdx
-  movq 8(%rdx), %r8 # args[0]
-  movq (%rdx), %r9 # args[1]
-  shrq $3, %r9 # untag_int(args[1])
-  addq $16, %r10 # a->slots
-  leaq (%r10, %r9, 8), %r10 # &(a->slots[i])
-  movq %r8, (%r10)
-  movq $2, -8(%rdx) # tag_null
-  jmp call_slot_code_end
+	movq 8(%rdx), %r8 # args[0]
+	movq (%rdx), %r9 # args[1]
+	shrq $3, %r9 # untag_int(args[1])
+	addq $16, %r10 # a->slots
+	leaq (%r10, %r9, 8), %r10 # &(a->slots[i])
+	movq %r8, (%r10)
+	movq $2, -8(%rdx) # tag_null
+	jmp call_slot_code_end
 l13:
-  subq $8, %rdx
-  movq (%rdx), %r8 # args[0]
-  shrq $3, %r8 # untag_int(args[0])
-  addq $16, %r10 # a->slots
-  movq (%r10, %r8, 8), %r10 # (a->slots[i])
-  movq %r10, -8(%rdx) # push(a->slots[i])
-  jmp call_slot_code_end
+	subq $8, %rdx
+	movq (%rdx), %r8 # args[0]
+	shrq $3, %r8 # untag_int(args[0])
+	addq $16, %r10 # a->slots
+	movq (%r10, %r8, 8), %r10 # (a->slots[i])
+	movq %r10, -8(%rdx) # push(a->slots[i])
+	jmp call_slot_code_end
 int:
 	mov (%r11), %ax
 	movq -8(%rdx), %r10
@@ -329,9 +329,9 @@ equal:
 	movq $0, -8(%rdx)
 	jmp call_slot_code_end
 method_address_cache:
-.quad -1
+	.quad -1
 receiver_type_cache:
-.quad -1
+	.quad -1
 call_slot_code_end:
 
 array_code:

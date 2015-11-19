@@ -1206,7 +1206,7 @@ int runSingleIns(ByteIns* ins, Program* p) {
                         push_frame(method->code, -1, method->nargs + method->nlocals + 1);
                         char *code = getAssemblyCode(p, method_id, call_slot->arity);
                         
-                        int64_t* type = (int64_t *)instruction_pointer - 1;
+                        int64_t* type = ((int64_t *)instruction_pointer) - 1;
                         int64_t* method_addr = type - 1;
 
                         *type = oobj->type;
