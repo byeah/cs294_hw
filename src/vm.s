@@ -169,16 +169,16 @@ call_slot_code:
 	leaq (%r9,%r8,8), %r10
 	movq %rdx, %r8
 	subq %r10, %r8
-	movq (%r8), %r9 // %r9: receiver
+	movq (%r8), %r9 # %r9: receiver
 	movq %r9, %r10
 	andq $7, %r10
 	movq $0xcafebabecafebabe, %r11 
-	cmpq $0, %r10 // (receiver & 7 == 0?)
+	cmpq $0, %r10 # (receiver & 7 == 0?)
 	je int
-	cmpq $2, %r9 // (receiver == 2?)
+	cmpq $2, %r9 # (receiver == 2?)
 	je call_slot_trap
-	leaq -1(%r9), %r10 // (%r10: receiver - 1)
-	cmpq $2, (%r10) // r_obj->type == Array ?
+	leaq -1(%r9), %r10 # (%r10: receiver - 1)
+	cmpq $2, (%r10) # r_obj->type == Array ?
 	je array
 
 call_slot_trap:
@@ -207,7 +207,7 @@ l12:
     movq 8(%rdx), %r8 # args[0]
     movq (%rdx), %r9 # args[1]
     shrq $3, %r9 # untag_int(args[1])
-    addq %16, %r10 # a->slots
+    addq $16, %r10 # a->slots
     leaq (%r10, %r9, 8), %r10 # &(a->slots[i])
     movq %r8, (%r10)
     movq $2, -8(%rdx) # tag_null
@@ -216,9 +216,9 @@ l13:
     subq $8, %rdx
     movq (%rdx), %r8 # args[0]
     shrq $3, %r8 # untag_int(args[0])
-    addq %16, %r10 # a->slots
-    leaq (%r10, %r8, 8), %r10 # &(a->slots[i])
-    movq ($r10), -8(%rdx) # push(a->slots[i])
+    addq $16, %r10 # a->slots
+    movq (%r10, %r8, 8), %r10 # (a->slots[i])
+    movq $r10, -8(%rdx) # push(a->slots[i])
     jmp call_slot_code_end
 int:
 	mov (%r11), %ax
