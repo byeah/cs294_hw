@@ -1204,8 +1204,15 @@ int runSingleIns(ByteIns* ins, Program* p) {
                         assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
 
                         push_frame(method->code, -1, method->nargs + method->nlocals + 1);
-                        instruction_pointer = getAssemblyCode(p, method_id, call_slot->arity);
+                        char *code = getAssemblyCode(p, method_id, call_slot->arity);
+                        
+                        int64_t* type = (int64_t *)instruction_pointer - 1;
+                        int64_t* method_addr = type - 1;
 
+                        *type = oobj->type;
+                        *method_addr = code;
+
+                        instruction_pointer = code;
                         //HACK
 #ifdef _MSC_VER
                         TaggedVal args[1024];

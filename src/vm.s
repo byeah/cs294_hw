@@ -164,28 +164,40 @@ call_code_end:
 
 
 call_slot_code:
-	movq $0xcafebabecafebabe, %r8
+	movq $0xcafebabecafebabe, %r8 # arity
 	movq $0, %r9
-	leaq (%r9,%r8,8), %r10
+	leaq (%r9,%r8,8), %r10 # arity * 8
 	movq %rdx, %r8
 	subq %r10, %r8
 	movq (%r8), %r9 # %r9: receiver
 	movq %r9, %r10
 	andq $7, %r10
-	movq $0xcafebabecafebabe, %r11 
-	cmpq $0, %r10 # (receiver & 7 == 0?)
+	movq $0xcafebabecafebabe, %r11 # name->value
+	movq $0xcafebabecafebabe, %r8 # &instruction_pointer
+    cmpq $0, %r10 # (receiver & 7 == 0?)
 	je int
+
 	cmpq $2, %r9 # (receiver == 2?)
 	je call_slot_trap
-	leaq -1(%r9), %r10 # (%r10: receiver - 1)
+	
+    leaq -1(%r9), %r10 # (%r10: receiver - 1)
 	cmpq $2, (%r10) # r_obj->type == Array ?
-	je array
+    je array
+
+    movq (%r10), %r9
+    cmpq %r9, receiver_type_cache(%rip)
+    jne call_slot_trap
+
+    leaq call_slot_code_end(%rip), %rax # call_slot_code_end
+    movq %rax, (%r8) # instruction_pointer
+    movq method_address_cache(%rip), %r9
+    call *%r9
+    jmp call_slot_code_end
 
 call_slot_trap:
-	leaq call_slot_code_end(%rip), %rax
-	movq $0xcafebabecafebabe, %r8
-	movq %rax, (%r8)
-	movq $0xbabecafebabecafe, %rax
+	leaq call_slot_code_end(%rip), %rax # call_slot_code_end
+    movq %rax, (%r8) # instruction_pointer
+    movq $0xbabecafebabecafe, %rax # return rax
 	ret
 	
 array:
@@ -316,6 +328,10 @@ l10:
 equal:
 	movq $0, -8(%rdx)
 	jmp call_slot_code_end
+method_address_cache:
+.quad -1
+receiver_type_cache:
+.qual -1
 call_slot_code_end:
 
 array_code:
