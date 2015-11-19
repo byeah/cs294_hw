@@ -133,7 +133,7 @@ return_code:
 	cmpq $0, %rcx
 	je finish_program
 	movq $-2,%rax
-	jmp 24(%rcx)
+	jmp *24(%rcx)
 finish_program:
 	movq $0, %rax
 	ret
@@ -159,7 +159,7 @@ call_func:
 	movq $0xcafebabecafebabe, %r11
 	addq %r11, %r10
 	movq %r10, (%r8)
-	jmp %r9
+	jmp *%r9
 call_code_end:
 
 
@@ -331,7 +331,7 @@ equal:
 method_address_cache:
 .quad -1
 receiver_type_cache:
-.qual -1
+.quad -1
 call_slot_code_end:
 
 array_code:
