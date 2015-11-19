@@ -218,7 +218,7 @@ l13:
     shrq $3, %r8 # untag_int(args[0])
     addq $16, %r10 # a->slots
     movq (%r10, %r8, 8), %r10 # (a->slots[i])
-    movq $r10, -8(%rdx) # push(a->slots[i])
+    movq %r10, -8(%rdx) # push(a->slots[i])
     jmp call_slot_code_end
 int:
 	mov (%r11), %ax
