@@ -11,9 +11,11 @@
 #define inline __inline
 #endif
 
-//#define DEBUG
 #define STAT
+static double lookup_time = 0;
+
 #define JIT
+
 #ifdef WIN32
 
 #include <windows.h>
@@ -648,17 +650,10 @@ int holes[65536];
 int holes_loc[65536];
 int debugV[1024];
 int64_t object_buffer[1024];
-double codegen_time = 0;
 
 char* compile_assembly_code(Program *p, Vector* code, int slots) {
 #ifndef JIT
     return;
-#endif
-#ifdef STAT
-    TIME_T t1, t2;
-    FREQ_T freq;
-    FREQ(freq);
-    TIME(t1);
 #endif
     int n = 0;
     int t = 0;
@@ -861,10 +856,6 @@ char* compile_assembly_code(Program *p, Vector* code, int slots) {
     }
     //printf("Total: %d\n",n);
     memcpy(res, code_buffer, n);
-#ifdef STAT
-    TIME(t2);
-    codegen_time += ELASPED_TIME(t1, t2, freq);
-#endif
     return res;
 }
 
@@ -920,7 +911,9 @@ void interpret_bc(Program* p) {
 #else
     direct_interpret_bc(p);
 #endif
-    fprintf(stderr, "JIT Time: %.4lf ms.\n", codegen_time);
+#ifdef STAT
+    fprintf(stderr, "Lookup Time: %.4lf ms.\n", lookup_time);
+#endif
 }
 
 char* getAssemblyCode(Program *p, int method_id, int slots) {
@@ -1047,6 +1040,12 @@ int runSingleIns(ByteIns* ins, Program* p) {
             break;
         }
         case SLOT_OP: {
+#ifdef STAT
+            TIME_T t1, t2;
+            FREQ_T freq;
+            FREQ(freq);
+            TIME(t1);
+#endif
             SlotIns* slot_ins = (SlotIns*)ins;
 
             TaggedVal val = pop();
@@ -1067,10 +1066,19 @@ int runSingleIns(ByteIns* ins, Program* p) {
 
             assert(idx >= 0, "Could not find the slot by name.\n");
 			push(obj_for_search->varslots[idx]);
-			
+#ifdef STAT
+            TIME(t2);
+            lookup_time += ELASPED_TIME(t1, t2, freq);
+#endif
             break;
         }
         case SET_SLOT_OP: {
+#ifdef STAT
+            TIME_T t1, t2;
+            FREQ_T freq;
+            FREQ(freq);
+            TIME(t1);
+#endif
             SetSlotIns* set_slot_ins = (SetSlotIns*)ins;
 
             TaggedVal value = pop();
@@ -1093,6 +1101,10 @@ int runSingleIns(ByteIns* ins, Program* p) {
             obj_for_search->varslots[idx] = value;
             push(value);
 
+#ifdef STAT
+            TIME(t2);
+            lookup_time += ELASPED_TIME(t1, t2, freq);
+#endif
             break;
         }
         case CALL_SLOT_OP: {
@@ -1192,6 +1204,12 @@ int runSingleIns(ByteIns* ins, Program* p) {
                         break;
                     }
                     else {
+#ifdef STAT
+                        TIME_T t1, t2;
+                        FREQ_T freq;
+                        FREQ(freq);
+                        TIME(t1);
+#endif
                         ObjectObj* oobj = (ObjectObj *)r_obj;
                         MethodValue* method = NULL;
                         int method_id;
@@ -1235,6 +1253,10 @@ int runSingleIns(ByteIns* ins, Program* p) {
                             sp->slots[i] = args[call_slot->arity - 1 - i];
                         }*/
 
+#ifdef STAT
+                        TIME(t2);
+                        lookup_time += ELASPED_TIME(t1, t2, freq);
+#endif
                         break;
                     }
                 }
