@@ -786,6 +786,7 @@ char* compile_assembly_code(Program *p, Vector* code, int slots) {
                 fillhole(code_buffer + n, l, 0xcafebabecafebabe, call_slot->arity);
                 fillhole(code_buffer + n, l, 0xcafebabecafebabe, name->value);
                 fillhole(code_buffer + n, l, 0xcafebabecafebabe, &instruction_pointer);
+                fillhole(code_buffer + n, l, 0xcafebabecafebabe, &next_sp);
                 fillhole(code_buffer + n, l, 0xbabecafebabecafe, ins);
 
                 n += l;
@@ -1202,16 +1203,18 @@ int runSingleIns(ByteIns* ins, Program* p) {
                         assert(method != NULL, "Could not find method for CALL_SLOT_OP.\n");
                         assert(method->tag == METHOD_VAL, "Invalid method type for CALL_SLOT_OP.\n");
                         assert(call_slot->arity <= method->nargs + method->nlocals + 1, "n <= num_slots + 1\n");
+						assert(call_slot->arity == method->nargs  + 1, "n <= num_slots + 1\n");
 
                         push_frame(method->code, -1, method->nargs + method->nlocals + 1);
                         char *code = getAssemblyCode(p, method_id, call_slot->arity);
-                        
+                        int64_t offset = sizeof(Frame) + sizeof(void*) * ( method->nargs + method->nlocals + 1);
                         int64_t* type = ((int64_t *)instruction_pointer) - 1;
                         int64_t* method_addr = type - 1;
+						int64_t* offset_addr = method_addr - 1;
 
                         *type = oobj->type;
                         *method_addr = code;
-
+						*offset_addr = offset;
                         instruction_pointer = code;
                         //HACK
 #ifdef _MSC_VER

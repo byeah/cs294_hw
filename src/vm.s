@@ -191,8 +191,17 @@ call_slot_code:
 	leaq call_slot_code_end(%rip), %rax # call_slot_code_end
 	movq %rax, (%r8) # instruction_pointer
 	movq method_address_cache(%rip), %r9
-	call *%r9
-	jmp call_slot_code_end
+	
+	movq $0xcafebabecafebabe, %r8  # next_sp
+	movq (%r8),%r10
+	movq %rcx, (%r10)
+	leaq call_slot_code_end(%rip), %r11
+	movq %r11, 24(%rcx)
+	movq %r10,%rcx
+	movq method_offset_cache(%rip), %r11
+	addq %r11, %r10
+	movq %r10, (%r8)
+	jmp *%r9
 
 call_slot_trap:
 	leaq call_slot_code_end(%rip), %rax # call_slot_code_end
@@ -328,6 +337,8 @@ l10:
 equal:
 	movq $0, -8(%rdx)
 	jmp call_slot_code_end
+method_offset_cache:
+	.quad -1
 method_address_cache:
 	.quad -1
 receiver_type_cache:
