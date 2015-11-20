@@ -1058,15 +1058,16 @@ int runSingleIns(ByteIns* ins, Program* p) {
             int idx = -1;
             ObjectObj* obj_for_search = NULL;
 
-            for (obj_for_search = obj; obj_for_search != NULL && idx == -1; obj_for_search = obj_for_search->parent) {
+            for (obj_for_search = obj; obj_for_search != NULL; obj_for_search = obj_for_search->parent) {
                 ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
                 idx = find_slot_index(p->values, class, slot_ins->name);
+                if (idx>=0)
+                	break;
             }
 
             assert(idx >= 0, "Could not find the slot by name.\n");
-
-            push(obj_for_search->varslots[idx]);
-
+			push(obj_for_search->varslots[idx]);
+			
             break;
         }
         case SET_SLOT_OP: {
@@ -1081,11 +1082,12 @@ int runSingleIns(ByteIns* ins, Program* p) {
             int idx = -1;
             ObjectObj* obj_for_search = NULL;
 
-            for (obj_for_search = obj; obj_for_search != NULL && idx == -1; obj_for_search = obj_for_search->parent) {
+            for (obj_for_search = obj; obj_for_search != NULL; obj_for_search = obj_for_search->parent) {
                 ClassValue* class = vector_get(p->values, obj_for_search->type - 3);
                 idx = find_slot_index(p->values, class, set_slot_ins->name);
-            }
-
+                if (idx>=0)
+            	break;
+		    }
             assert(idx >= 0, "Could not find the slot by name.\n");
 
             obj_for_search->varslots[idx] = value;
