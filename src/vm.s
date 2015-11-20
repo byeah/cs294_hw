@@ -32,6 +32,10 @@
 	.globl call_init_code_end
 	.globl object_code
 	.globl object_code_end
+	.globl slot_code
+	.globl slot_code_end
+	.globl set_slot_code
+	.globl set_slot_code_end
 	
 call_feeny:
 	movq %rdi, %rax
@@ -62,24 +66,24 @@ code_placeholder:
 code_placeholder_end:
 
 goto_code:
-	leaq after_trap(%rip), %rax
-	movq $0xcafebabecafebabe, %r8
-	movq %rax, (%r8)
-	movq $0xbabecafebabecafe, %rax
-	ret
-after_trap:
+#	leaq after_trap(%rip), %rax
+#	movq $0xcafebabecafebabe, %r8
+#	movq %rax, (%r8)
+#	movq $0xbabecafebabecafe, %rax
+#	ret
+#after_trap:
 	movq $0xcafebabecafebabe, %r8
 	jmp *%r8
 goto_code_end:
 
 
 branch_code:
-	leaq after_trap2(%rip), %rax
-	movq $0xcafebabecafebabe, %r8
-	movq %rax, (%r8)
-	movq $0xbabecafebabecafe, %rax
-	ret
-after_trap2:
+#	leaq after_trap2(%rip), %rax
+#	movq $0xcafebabecafebabe, %r8
+#	movq %rax, (%r8)
+#	movq $0xbabecafebabecafe, %rax
+#	ret
+#after_trap2:
 	subq $8, %rdx
 	cmpq $2, (%rdx)
 	je branch_code_end
@@ -440,4 +444,49 @@ for_object2:
 object_code_end:
 
 
+slot_code:
+	movq -8(%rdx), %r8 #receiver
+	cmpq %r8, slot_receiver_address_cache(%rip)
+	jne slot_trap
+	movq slot_address_cache(%rip), %r9
+	movq (%r9), %r10
+	movq %r10, -8(%rdx)
+	jmp slot_code_end
+	
+slot_trap:
+	leaq slot_code_end(%rip), %rax # slot_code_end
+	movq $0xcafebabecafebabe, %r8  #instruction_pointer
+	movq %rax, (%r8)  #instruction_pointer
+	movq $0xbabecafebabecafe, %rax # return rax
+	ret
+
+slot_address_cache:
+	.quad -1
+slot_receiver_address_cache:
+	.quad -1
+slot_code_end:
+
+set_slot_code:
+	movq -16(%rdx), %r8 #receiver
+	cmpq %r8, set_slot_receiver_address_cache(%rip)
+	jne set_slot_trap
+	movq set_slot_address_cache(%rip), %r9
+	movq -8(%rdx), %r10
+	movq %r10, (%r9)
+	movq %r10, -16(%rdx)
+	subq $8,%rdx
+	jmp set_slot_code_end
+	
+set_slot_trap:
+	leaq set_slot_code_end(%rip), %rax # set_slot_code_end
+	movq $0xcafebabecafebabe, %r8  #instruction_pointer
+	movq %rax, (%r8)  #instruction_pointer
+	movq $0xbabecafebabecafe, %rax # return rax
+	ret
+
+set_slot_address_cache:
+	.quad -1
+set_slot_receiver_address_cache:
+	.quad -1
+set_slot_code_end:
 

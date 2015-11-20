@@ -624,6 +624,10 @@ extern char call_init_code[];
 extern char call_init_code_end[];
 extern char object_code[];
 extern char object_code_end[];
+extern char slot_code[];
+extern char slot_code_end[];
+extern char set_slot_code[];
+extern char set_slot_code_end[];
 ht_t label_table;
 char** func_code;
 
@@ -820,6 +824,20 @@ char* compile_assembly_code(Program *p, Vector* code, int slots) {
                 break;
 
             }
+            case SLOT_OP: {
+                int l = fillcode(code_buffer + n, slot_code, slot_code_end);
+                fillhole(code_buffer + n, l, 0xcafebabecafebabe, &instruction_pointer);
+                fillhole(code_buffer + n, l, 0xbabecafebabecafe, ins);
+                n += l;
+                break;
+            }
+            case SET_SLOT_OP: {
+                int l = fillcode(code_buffer + n, set_slot_code, set_slot_code_end);
+                fillhole(code_buffer + n, l, 0xcafebabecafebabe, &instruction_pointer);
+                fillhole(code_buffer + n, l, 0xbabecafebabecafe, ins);
+                n += l;
+                break;
+            }
             default: {
                 int l = fillcode(code_buffer + n, code_placeholder, code_placeholder_end);
                 fillhole(code_buffer + n, l, 0xcafebabecafebabe, &instruction_pointer);
@@ -838,8 +856,8 @@ char* compile_assembly_code(Program *p, Vector* code, int slots) {
                 GotoIns* goto_ins = (GotoIns *)ins;
                 int label = ht_get(&label_table, goto_ins->name);
                 int l = goto_code_end - goto_code;
-                fillhole(code_buffer + holes_loc[i], l, 0xcafebabecafebabe, &instruction_pointer);
-                fillhole(code_buffer + holes_loc[i], l, 0xbabecafebabecafe, -1);
+                //fillhole(code_buffer + holes_loc[i], l, 0xcafebabecafebabe, &instruction_pointer);
+                //fillhole(code_buffer + holes_loc[i], l, 0xbabecafebabecafe, -1);
                 fillhole(code_buffer + holes_loc[i], l, 0xcafebabecafebabe, res + label);
                 //printf("Comping GOTO offset: %d\n",label);
                 break;
@@ -848,8 +866,8 @@ char* compile_assembly_code(Program *p, Vector* code, int slots) {
                 BranchIns* branch_ins = (BranchIns *)ins;
                 int label = ht_get(&label_table, branch_ins->name);
                 int l = branch_code_end - branch_code;
-                fillhole(code_buffer + holes_loc[i], l, 0xcafebabecafebabe, &instruction_pointer);
-                fillhole(code_buffer + holes_loc[i], l, 0xbabecafebabecafe, -1);
+                //fillhole(code_buffer + holes_loc[i], l, 0xcafebabecafebabe, &instruction_pointer);
+                //fillhole(code_buffer + holes_loc[i], l, 0xbabecafebabecafe, -1);
                 fillhole(code_buffer + holes_loc[i], l, 0xcafebabecafebabe, res + label);
                 //printf("Comping BRANCH offset: %d\n",label);
                 break;
@@ -1067,13 +1085,15 @@ int runSingleIns(ByteIns* ins, Program* p) {
 
             assert(idx >= 0, "Could not find the slot by name.\n");
 			push(obj_for_search->varslots[idx]);
-			
+			int64_t* type = ((int64_t *)instruction_pointer) - 1;
+            int64_t* slot_addr = type - 1;
+            *type = val;
+            *slot_addr = obj_for_search->varslots+idx;
             break;
         }
         case SET_SLOT_OP: {
             SetSlotIns* set_slot_ins = (SetSlotIns*)ins;
-
-            TaggedVal value = pop();
+			TaggedVal value = pop();
             TaggedVal tagged_obj = pop();
 
             ObjectObj *obj = (ObjectObj *)untag_object(tagged_obj);
@@ -1092,6 +1112,10 @@ int runSingleIns(ByteIns* ins, Program* p) {
 
             obj_for_search->varslots[idx] = value;
             push(value);
+            int64_t* type = ((int64_t *)instruction_pointer) - 1;
+            int64_t* slot_addr = type - 1;
+            *type = tagged_obj;
+            *slot_addr = obj_for_search->varslots+idx;
 
             break;
         }
