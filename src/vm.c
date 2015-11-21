@@ -12,7 +12,8 @@
 #endif
 
 #define STAT
-static double lookup_time = 0;
+
+static int lookup_count = 0;
 
 #define JIT
 
@@ -930,7 +931,7 @@ void interpret_bc(Program* p) {
     direct_interpret_bc(p);
 #endif
 #ifdef STAT
-    fprintf(stderr, "Lookup Time: %.4lf ms.\n", lookup_time);
+    fprintf(stderr, "Lookup: %d.\n", lookup_count);
 #endif
 }
 
@@ -1059,10 +1060,7 @@ int runSingleIns(ByteIns* ins, Program* p) {
         }
         case SLOT_OP: {
 #ifdef STAT
-            TIME_T t1, t2;
-            FREQ_T freq;
-            FREQ(freq);
-            TIME(t1);
+            ++lookup_count;
 #endif
             SlotIns* slot_ins = (SlotIns*)ins;
 
@@ -1088,18 +1086,11 @@ int runSingleIns(ByteIns* ins, Program* p) {
             int64_t* slot_addr = type - 1;
             *type = val;
             *slot_addr = obj_for_search->varslots+idx;
-#ifdef STAT
-            TIME(t2);
-            lookup_time += ELASPED_TIME(t1, t2, freq);
-#endif
             break;
         }
         case SET_SLOT_OP: {
 #ifdef STAT
-            TIME_T t1, t2;
-            FREQ_T freq;
-            FREQ(freq);
-            TIME(t1);
+            ++lookup_count;
 #endif
             SetSlotIns* set_slot_ins = (SetSlotIns*)ins;
             TaggedVal value = pop();
@@ -1125,11 +1116,6 @@ int runSingleIns(ByteIns* ins, Program* p) {
             int64_t* slot_addr = type - 1;
             *type = tagged_obj;
             *slot_addr = obj_for_search->varslots+idx;
-
-#ifdef STAT
-            TIME(t2);
-            lookup_time += ELASPED_TIME(t1, t2, freq);
-#endif
             break;
         }
         case CALL_SLOT_OP: {
@@ -1230,10 +1216,7 @@ int runSingleIns(ByteIns* ins, Program* p) {
                     }
                     else {
 #ifdef STAT
-                        TIME_T t1, t2;
-                        FREQ_T freq;
-                        FREQ(freq);
-                        TIME(t1);
+                        ++lookup_count;
 #endif
                         ObjectObj* oobj = (ObjectObj *)r_obj;
                         MethodValue* method = NULL;
@@ -1277,11 +1260,6 @@ int runSingleIns(ByteIns* ins, Program* p) {
                         for (int i = 0; i < call_slot->arity; i++) {
                             sp->slots[i] = args[call_slot->arity - 1 - i];
                         }*/
-
-#ifdef STAT
-                        TIME(t2);
-                        lookup_time += ELASPED_TIME(t1, t2, freq);
-#endif
                         break;
                     }
                 }
