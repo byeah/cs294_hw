@@ -18,12 +18,48 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import feeny.nodes.*;
-import feeny.reader.Reader;
+import feeny.reader.*;
 
 public final class Feeny extends TruffleLanguage<ExecutionContext> {
     public static void main(String[] args) {
         // Create a corresponding Truffle AST and execute it
         test_feeny();
+    }
+
+    private static RootNode transform_expr(Exp expr, FrameDescriptor fd) {
+        if (expr instanceof IntExp) {
+            IntExp e = (IntExp) expr;
+            return new IntExpNode(e.value, fd);
+        } else if (expr instanceof NullExp) {
+            return new NullExpNode(fd);
+        } else if (expr instanceof PrintfExp) {
+            PrintfExp e = (PrintfExp) expr;
+            RootNode[] args = new RootNode[e.exps.length];
+            for (int i = 0; i < e.exps.length; ++i) {
+                args[i] = transform_expr(e.exps[i], fd);
+            }
+            return new PrintfExpNode(e.format, args, fd);
+        }
+        return null;
+    }
+
+    private static RootNode transform_stmt(ScopeStmt stmt, FrameDescriptor fd) {
+        if (stmt instanceof ScopeVar) {
+            ScopeVar scope = (ScopeVar) stmt;
+            return new ScopeVarNode(scope.name, transform_expr(scope.exp, fd), fd);
+        } else if (stmt instanceof ScopeFn) {
+            ScopeFn scope = (ScopeFn) stmt;
+            FrameDescriptor new_fd = new FrameDescriptor();
+            return new ScopeFnNode(scope.name, scope.args, transform_stmt(scope.body, new_fd), fd);
+        } else if (stmt instanceof ScopeSeq) {
+            ScopeSeq scope = (ScopeSeq) stmt;
+            return new ScopeSeqNode(transform_stmt(scope.a, fd), transform_stmt(scope.b, fd), fd);
+        } else if (stmt instanceof ScopeExp) {
+            ScopeExp scope = (ScopeExp) stmt;
+            return new ScopeExpNode(transform_expr(scope.exp, fd), fd);
+        } else {
+            throw new RuntimeException("Unrecognized ScopeStmt.");
+        }
     }
 
     private static void test_feeny() {

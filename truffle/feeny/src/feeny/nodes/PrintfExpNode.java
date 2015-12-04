@@ -9,11 +9,11 @@ import com.oracle.truffle.api.frame.FrameSlot;
 
 import feeny.Feeny;
 
-public class PrintExpNode extends RootNode {
+public class PrintfExpNode extends RootNode {
     String format;
     @Children RootNode[] expNodes;
 
-    public PrintExpNode(String fmt, RootNode[] exps, FrameDescriptor frameDescriptor) {
+    public PrintfExpNode(String fmt, RootNode[] exps, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
         format = fmt;
         expNodes = exps;
