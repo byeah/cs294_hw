@@ -2,8 +2,10 @@ package feeny.nodes;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.frame.FrameSlot;
 
@@ -16,7 +18,7 @@ public class ScopeFnNode extends RootNode {
     public ScopeFnNode(String name, String[] args, RootNode body, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
         slot = frameDescriptor.findFrameSlot(name);
-        callNode = TruffleRuntime.createDirectCallNode(body.getCallTarget());
+        callNode = Truffle.getRuntime().createDirectCallNode(body.getCallTarget());
     }
 
     @Override

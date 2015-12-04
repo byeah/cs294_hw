@@ -23,8 +23,8 @@ public class CallSlotExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        Integer i = expNode.execute(frame);
-        Integer j = argNodes[0].execute(frame);
+        Integer i = (Integer) expNode.execute(frame);
+        Integer j = (Integer) argNodes[0].execute(frame);
         switch (name) {
             case "add":
                 return i + j;

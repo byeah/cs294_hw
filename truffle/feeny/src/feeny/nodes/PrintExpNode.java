@@ -27,7 +27,7 @@ public class PrintExpNode extends RootNode {
         }
         StringBuilder sb = new StringBuilder();
         int j = 0;
-        for (int i = 0; i < format.length; ++i) {
+        for (int i = 0; i < format.length(); ++i) {
             if (format.charAt(i) == '~') {
                 sb.append(args[j++]);
             } else {

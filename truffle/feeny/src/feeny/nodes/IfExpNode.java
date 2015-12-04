@@ -24,9 +24,9 @@ public class IfExpNode extends RootNode {
     @Override
     public Object execute(VirtualFrame frame) {
         if (cond.execute(frame) == null) {
-            return alter.execute(frame)
+            return alter.execute(frame);
         } else {
-            return then.execute(frame)
+            return then.execute(frame);
         }
     }
 }

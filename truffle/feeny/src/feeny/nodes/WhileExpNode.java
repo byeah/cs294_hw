@@ -21,7 +21,7 @@ public class WhileExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        while (conf.execute(frame) != null) {
+        while (cond.execute(frame) != null) {
             loop.execute(frame);
         }
         return null;
