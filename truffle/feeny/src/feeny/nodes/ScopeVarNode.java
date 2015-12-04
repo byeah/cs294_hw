@@ -6,6 +6,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 
 import feeny.Feeny;
 
@@ -15,7 +16,7 @@ public class ScopeVarNode extends RootNode {
 
     public ScopeVarNode(String name, RootNode e, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
-        slot = frameDescriptor.findFrameSlot(name);
+        slot = frameDescriptor.findOrAddFrameSlot(name, FrameSlotKind.Object);
         exp = e;
     }
 

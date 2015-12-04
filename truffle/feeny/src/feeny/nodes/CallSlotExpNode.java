@@ -12,7 +12,7 @@ import feeny.Feeny;
 public class CallSlotExpNode extends RootNode {
     String name;
     @Child RootNode expNode;
-    @Children RootNode[] argNodes;
+    @Children final RootNode[] argNodes;
 
     public CallSlotExpNode(String n, RootNode exp, RootNode[] args, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);

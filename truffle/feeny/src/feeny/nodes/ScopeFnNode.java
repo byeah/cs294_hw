@@ -8,22 +8,23 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 
 import feeny.Feeny;
 
 public class ScopeFnNode extends RootNode {
     FrameSlot slot;
-    @Child DirectCallNode callNode;
+    RootNode body;
 
     public ScopeFnNode(String name, String[] args, RootNode body, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
-        slot = frameDescriptor.findFrameSlot(name);
-        callNode = Truffle.getRuntime().createDirectCallNode(body.getCallTarget());
+        slot = frameDescriptor.findOrAddFrameSlot(name, FrameSlotKind.Object);
+        this.body = body;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        frame.setObject(slot, callNode);
+        frame.setObject(slot, body);
         return null;
     }
 }

@@ -3,6 +3,7 @@ package feeny.nodes;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -12,7 +13,7 @@ import feeny.Feeny;
 
 public class CallExpNode extends RootNode {
     FrameSlot slot;
-    @Children RootNode[] argNodes;
+    @Children final RootNode[] argNodes;
 
     public CallExpNode(String name, RootNode[] args, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
@@ -26,7 +27,13 @@ public class CallExpNode extends RootNode {
         for (int i = 0; i < argNodes.length; ++i) {
             args[i] = argNodes[i].execute(frame);
         }
-        DirectCallNode callNode = (DirectCallNode) frame.getValue(slot);
-        return callNode.call(frame, args);
+
+        System.out.println("Calling function " + slot.toString() + " under " + frame.getFrameDescriptor());
+
+        RootNode body = (RootNode) frame.getValue(slot);
+        System.out.println(body);
+
+        RootCallTarget ct = Truffle.getRuntime().createCallTarget(body);
+        return ct.call(frame, args);
     }
 }

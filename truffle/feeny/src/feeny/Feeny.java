@@ -26,37 +26,74 @@ public final class Feeny extends TruffleLanguage<ExecutionContext> {
         test_feeny();
     }
 
-    private static RootNode transform_expr(Exp expr, FrameDescriptor fd) {
+    private static RootNode transform_expr(Exp expr, FrameDescriptor genv, FrameDescriptor env) {
+        FrameDescriptor cenv = (env == null) ? genv : env;
         if (expr instanceof IntExp) {
             IntExp e = (IntExp) expr;
-            return new IntExpNode(e.value, fd);
+            return new IntExpNode(e.value, cenv);
         } else if (expr instanceof NullExp) {
-            return new NullExpNode(fd);
+            return new NullExpNode(cenv);
         } else if (expr instanceof PrintfExp) {
             PrintfExp e = (PrintfExp) expr;
             RootNode[] args = new RootNode[e.exps.length];
             for (int i = 0; i < e.exps.length; ++i) {
-                args[i] = transform_expr(e.exps[i], fd);
+                args[i] = transform_expr(e.exps[i], genv, env);
             }
-            return new PrintfExpNode(e.format, args, fd);
+            return new PrintfExpNode(e.format, args, cenv);
+        } else if (expr instanceof CallSlotExp) {
+            CallSlotExp e = (CallSlotExp) expr;
+            RootNode obj = transform_expr(e.exp, genv, env);
+            RootNode[] args = new RootNode[e.args.length];
+            for (int i = 0; i < e.args.length; ++i) {
+                args[i] = transform_expr(e.args[i], genv, env);
+            }
+            return new CallSlotExpNode(e.name, obj, args, cenv);
+        } else if (expr instanceof CallExp) {
+            CallExp e = (CallExp) expr;
+            RootNode[] args = new RootNode[e.args.length];
+            for (int i = 0; i < e.args.length; ++i) {
+                args[i] = transform_expr(e.args[i], genv, env);
+            }
+            return new CallExpNode(e.name, args, cenv);
+        } else if (expr instanceof SetExp) {
+            SetExp e = (SetExp) expr;
+            RootNode arg = transform_expr(e.exp, genv, env);
+            return new SetExpNode(e.name, arg, cenv);
+        } else if (expr instanceof IfExp) {
+            IfExp e = (IfExp) expr;
+            RootNode cond = transform_expr(e.pred, genv, env);
+            RootNode conseq = transform_stmt(e.conseq, genv, env);
+            RootNode alt = transform_stmt(e.alt, genv, env);
+            return new IfExpNode(cond, conseq, alt, cenv);
+        } else if (expr instanceof WhileExp) {
+            WhileExp e = (WhileExp) expr;
+            RootNode cond = transform_expr(e.pred, genv, env);
+            RootNode body = transform_stmt(e.body, genv, env);
+            return new WhileExpNode(cond, body, cenv);
+        } else if (expr instanceof RefExp) {
+            RefExp e = (RefExp) expr;
+            return new RefExpNode(e.name, cenv);
+        } else {
+            throw new RuntimeException("Unrecognized Exp.");
         }
-        return null;
     }
 
-    private static RootNode transform_stmt(ScopeStmt stmt, FrameDescriptor fd) {
+    private static RootNode transform_stmt(ScopeStmt stmt, FrameDescriptor genv, FrameDescriptor env) {
+        FrameDescriptor cenv = (env == null) ? genv : env;
         if (stmt instanceof ScopeVar) {
             ScopeVar scope = (ScopeVar) stmt;
-            return new ScopeVarNode(scope.name, transform_expr(scope.exp, fd), fd);
+            return new ScopeVarNode(scope.name, transform_expr(scope.exp, genv, env), cenv);
         } else if (stmt instanceof ScopeFn) {
             ScopeFn scope = (ScopeFn) stmt;
-            FrameDescriptor new_fd = new FrameDescriptor();
-            return new ScopeFnNode(scope.name, scope.args, transform_stmt(scope.body, new_fd), fd);
+            FrameDescriptor nenv = genv.shallowCopy();
+            assert (cenv == genv);
+            return new ScopeFnNode(scope.name, scope.args, transform_stmt(scope.body, genv, nenv), cenv);
         } else if (stmt instanceof ScopeSeq) {
             ScopeSeq scope = (ScopeSeq) stmt;
-            return new ScopeSeqNode(transform_stmt(scope.a, fd), transform_stmt(scope.b, fd), fd);
+            return new ScopeSeqNode(transform_stmt(scope.a, genv, env), transform_stmt(scope.b, genv, env), cenv);
         } else if (stmt instanceof ScopeExp) {
             ScopeExp scope = (ScopeExp) stmt;
-            return new ScopeExpNode(transform_expr(scope.exp, fd), fd);
+            return new ScopeExpNode(transform_expr(scope.exp, genv, env), cenv);
         } else {
             throw new RuntimeException("Unrecognized ScopeStmt.");
         }
@@ -66,8 +103,15 @@ public final class Feeny extends TruffleLanguage<ExecutionContext> {
         System.out.println("=== Testing Feeny ===");
         try {
             Reader reader = new Reader("tests/fibonacci.ast");
-            System.out.println(reader.read());
+            ScopeStmt ast = reader.read();
+
+            System.out.println(ast);
             System.out.println("Create and Execute Truffle Feeny AST");
+
+            FrameDescriptor genv = new FrameDescriptor();
+            RootNode root = transform_stmt(ast, genv, null);
+
+            exec_node(root);
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }

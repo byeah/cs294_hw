@@ -11,7 +11,7 @@ import feeny.Feeny;
 
 public class PrintfExpNode extends RootNode {
     String format;
-    @Children RootNode[] expNodes;
+    @Children final RootNode[] expNodes;
 
     public PrintfExpNode(String fmt, RootNode[] exps, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
