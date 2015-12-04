@@ -14,17 +14,19 @@ import feeny.Feeny;
 
 public class ScopeFnNode extends RootNode {
     FrameSlot slot;
-    RootNode body;
+    public RootNode body;
+    public String[] args;
 
     public ScopeFnNode(String name, String[] args, RootNode body, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
         slot = frameDescriptor.findOrAddFrameSlot(name, FrameSlotKind.Object);
         this.body = body;
+        this.args = args;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        frame.setObject(slot, body);
+        frame.setObject(slot, this);
         return null;
     }
 }
