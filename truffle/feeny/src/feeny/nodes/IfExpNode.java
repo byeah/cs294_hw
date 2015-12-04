@@ -9,19 +9,24 @@ import com.oracle.truffle.api.frame.FrameSlot;
 
 import feeny.Feeny;
 
-public class ScopeFnNode extends RootNode {
-    FrameSlot slot;
-    @Child DirectCallNode callNode;
+public class IfExpNode extends RootNode {
+    @Child RootNode cond;
+    @Child RootNode then;
+    @Child RootNode alter;
 
-    public ScopeFnNode(String name, String[] args, RootNode body, FrameDescriptor frameDescriptor) {
+    public IfExpNode(RootNode pred, RootNode conseq, RootNode alt, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
-        slot = frameDescriptor.findFrameSlot(name);
-        callNode = TruffleRuntime.createDirectCallNode(body.getCallTarget());
+        cond = pred;
+        then = conseq;
+        alter = alt;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        frame.setObject(slot, callNode);
-        return null;
+        if (cond.execute(frame) == null) {
+            return alter.execute(frame)
+        } else {
+            return then.execute(frame)
+        }
     }
 }
