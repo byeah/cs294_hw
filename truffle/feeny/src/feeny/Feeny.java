@@ -61,14 +61,16 @@ public final class Feeny extends TruffleLanguage<ExecutionContext> {
             return new SetExpNode(e.name, arg, cenv);
         } else if (expr instanceof IfExp) {
             IfExp e = (IfExp) expr;
+            FrameDescriptor nenv = cenv.shallowCopy();
             RootNode cond = transform_expr(e.pred, genv, env);
-            RootNode conseq = transform_stmt(e.conseq, genv, env);
-            RootNode alt = transform_stmt(e.alt, genv, env);
+            RootNode conseq = transform_stmt(e.conseq, genv, nenv);
+            RootNode alt = transform_stmt(e.alt, genv, nenv);
             return new IfExpNode(cond, conseq, alt, cenv);
         } else if (expr instanceof WhileExp) {
             WhileExp e = (WhileExp) expr;
+            FrameDescriptor nenv = cenv.shallowCopy();
             RootNode cond = transform_expr(e.pred, genv, env);
-            RootNode body = transform_stmt(e.body, genv, env);
+            RootNode body = transform_stmt(e.body, genv, nenv);
             return new WhileExpNode(cond, body, cenv);
         } else if (expr instanceof RefExp) {
             RefExp e = (RefExp) expr;
@@ -85,9 +87,10 @@ public final class Feeny extends TruffleLanguage<ExecutionContext> {
             return new ScopeVarNode(scope.name, transform_expr(scope.exp, genv, env), cenv);
         } else if (stmt instanceof ScopeFn) {
             ScopeFn scope = (ScopeFn) stmt;
-            FrameDescriptor nenv = genv.shallowCopy();
+            FrameDescriptor nenv = new FrameDescriptor();
             assert (cenv == genv);
-            return new ScopeFnNode(scope.name, scope.args, transform_stmt(scope.body, genv, nenv), cenv);
+            FuncNode body = new FuncNode(transform_stmt(scope.body, genv, nenv), scope.args, nenv);
+            return new ScopeFnNode(scope.name, body, cenv);
         } else if (stmt instanceof ScopeSeq) {
             ScopeSeq scope = (ScopeSeq) stmt;
             return new ScopeSeqNode(transform_stmt(scope.a, genv, env), transform_stmt(scope.b, genv, env), cenv);
@@ -102,7 +105,7 @@ public final class Feeny extends TruffleLanguage<ExecutionContext> {
     private static void test_feeny() {
         System.out.println("=== Testing Feeny ===");
         try {
-            Reader reader = new Reader("tests/fibonacci.ast");
+            Reader reader = new Reader("tests/hello3.ast");
             ScopeStmt ast = reader.read();
 
             System.out.println(ast);

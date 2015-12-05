@@ -1,0 +1,29 @@
+defn stack (n) :
+  object :
+    var d = array(n,0)
+    var size = 0
+
+    method push (x) :
+      this.d[this.size] = x
+      this.size = this.size + 1
+
+    method peek ():
+      this.d[this.size - 1]
+
+    method pop ():
+      this.size = this.size - 1
+      this.d[this.size]
+
+
+var s = stack(10)
+
+; Push items
+var i = 0
+while i < 10 :
+  s.push(i * 10)
+  i = i + 1
+
+; Pop items
+while s.size > 0 :
+  printf(" About to pop : ~\n " , s.peek())
+  printf(" Popped : ~\n ", s.pop())

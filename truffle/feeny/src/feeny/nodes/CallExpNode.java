@@ -12,7 +12,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.frame.FrameSlot;
 
 import feeny.Feeny;
-import javafx.util.Pair;
 
 public class CallExpNode extends RootNode {
     FrameSlot slot;
@@ -26,46 +25,20 @@ public class CallExpNode extends RootNode {
         argNodes = args;
     }
 
-    public Frame getTopLevelFrame(VirtualFrame frame) {
-        if (frame.getArguments().length == 0) {
-            return frame.materialize();
-        } else {
-            return (Frame) frame.getArguments()[0];
-        }
-    }
-
-    public Object lookupSlot(VirtualFrame frame) {
-        Object o = frame.getValue(slot);
-        if (o == null) {
-            Frame tlf = getTopLevelFrame(frame);
-            FrameSlot tlSlot = tlf.getFrameDescriptor().findFrameSlot(name);
-            o = tlf.getValue(tlSlot);
-        }
-        return o;
-    }
-
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Calling function " + slot.toString() + " under " + frame.getFrameDescriptor());
+        System.out.println("Calling Exp " + slot + " under " + frame.getFrameDescriptor());
 
-        Object[] args = new Object[argNodes.length];
-        for (int i = 0; i < argNodes.length; ++i) {
-            args[i] = argNodes[i].execute(frame);
+        Object[] args = new Object[argNodes.length + 1];
+        args[0] = frame;
+
+        for (int i = 1; i < args.length; ++i) {
+            args[i] = argNodes[i - 1].execute(frame);
         }
 
-        ScopeFnNode fnNode = (ScopeFnNode) lookupSlot(frame);
-        assert (fnNode != null);
-        RootNode body = fnNode.body;
-        String[] argName = fnNode.args;
+        RootCallTarget ct = (RootCallTarget) frame.getValue(slot);
+        assert (ct != null);
 
-        for (int i = 0; i < argName.length; ++i) {
-            FrameSlot argSlot = frame.getFrameDescriptor().findOrAddFrameSlot(argName[i], FrameSlotKind.Object);
-            frame.setObject(argSlot, args[i]);
-        }
-
-        System.out.println(body);
-
-        RootCallTarget ct = Truffle.getRuntime().createCallTarget(body);
-        return ct.call(frame, getTopLevelFrame(frame));
+        return ct.call(args);
     }
 }

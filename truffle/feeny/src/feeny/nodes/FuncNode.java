@@ -12,20 +12,24 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 
 import feeny.Feeny;
 
-public class ScopeFnNode extends RootNode {
-    FrameSlot slot;
-    RootCallTarget ct;
+public class FuncNode extends RootNode {
+    @Child RootNode body;
+    FrameSlot[] args;
 
-    public ScopeFnNode(String name, FuncNode func, FrameDescriptor env) {
+    public FuncNode(RootNode body, String[] args, FrameDescriptor env) {
         super(Feeny.class, null, env);
-        slot = env.findOrAddFrameSlot(name, FrameSlotKind.Object);
-        this.ct = Truffle.getRuntime().createCallTarget(func);
+        this.body = body;
+        this.args = new FrameSlot[args.length];
+        for (int i = 0; i < args.length; ++i) {
+            this.args[i] = env.findOrAddFrameSlot(args[i], FrameSlotKind.Object);
+        }
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Defining Func " + slot + " = " + ct);
-        frame.setObject(slot, ct);
-        return null;
+        for (int i = 1; i < frame.getArguments().length; ++i) {
+            frame.setObject(args[i - 1], frame.getArguments()[i]);
+        }
+        return body.execute(frame);
     }
 }

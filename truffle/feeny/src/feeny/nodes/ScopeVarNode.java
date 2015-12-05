@@ -22,6 +22,7 @@ public class ScopeVarNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
+        System.out.println("Defining Var " + slot + " = " + exp);
         Integer i = (Integer) exp.execute(frame);
         frame.setObject(slot, i);
         return null;

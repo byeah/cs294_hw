@@ -7,6 +7,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 
 import feeny.Feeny;
 
@@ -16,13 +17,14 @@ public class RefExpNode extends RootNode {
 
     public RefExpNode(String name, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
-        this.slot = frameDescriptor.findFrameSlot(name);
+        this.slot = frameDescriptor.findOrAddFrameSlot(name, FrameSlotKind.Object);
         this.name = name;
+        System.out.println("AST RefExpNode " + name + " " + slot);
     }
 
     public Frame getTopLevelFrame(VirtualFrame frame) {
         if (frame.getArguments().length == 0) {
-            return frame.materialize();
+            return frame;
         } else {
             return (Frame) frame.getArguments()[0];
         }
@@ -40,6 +42,7 @@ public class RefExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
+        System.out.println("Ref " + name + " " + slot);
         return lookupSlot(frame);
     }
 }
