@@ -25,9 +25,19 @@ public class CallExpNode extends RootNode {
         argNodes = args;
     }
 
+    public Object findSlot(VirtualFrame frame) {
+        Object o = frame.getValue(slot);
+        if (o == null && frame.getArguments().length > 0) {
+            VirtualFrame parent = (VirtualFrame) frame.getArguments()[0];
+            o = parent.getValue(slot);
+        }
+        return o;
+    }
+
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Calling Exp " + slot + " under " + frame.getFrameDescriptor());
+        // System.out.println("Calling Exp " + slot + " under " +
+        // frame.getFrameDescriptor().toString());
 
         Object[] args = new Object[argNodes.length + 1];
         args[0] = frame;
@@ -36,7 +46,8 @@ public class CallExpNode extends RootNode {
             args[i] = argNodes[i - 1].execute(frame);
         }
 
-        RootCallTarget ct = (RootCallTarget) frame.getValue(slot);
+        RootCallTarget ct = (RootCallTarget) findSlot(frame);
+        // System.out.println(ct.toString());
         assert (ct != null);
 
         return ct.call(args);

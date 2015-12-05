@@ -21,7 +21,8 @@ public class SetExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
+        // System.out.println("Set " + slot + " " + expNode);
         frame.setObject(slot, expNode.execute(frame));
-        return null;
+        return new NullObj();
     }
 }

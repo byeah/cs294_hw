@@ -19,7 +19,7 @@ public class ScopeExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Eval exp " + exp);
+        // System.out.println("Eval exp " + exp);
         return exp.execute(frame);
     }
 }

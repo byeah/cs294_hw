@@ -19,30 +19,22 @@ public class RefExpNode extends RootNode {
         super(Feeny.class, null, frameDescriptor);
         this.slot = frameDescriptor.findOrAddFrameSlot(name, FrameSlotKind.Object);
         this.name = name;
-        System.out.println("AST RefExpNode " + name + " " + slot);
+        // System.out.println("AST RefExpNode " + name + " " + slot);
     }
 
-    public Frame getTopLevelFrame(VirtualFrame frame) {
-        if (frame.getArguments().length == 0) {
-            return frame;
-        } else {
-            return (Frame) frame.getArguments()[0];
-        }
-    }
-
-    public Object lookupSlot(VirtualFrame frame) {
+    public Object findSlot(VirtualFrame frame) {
         Object o = frame.getValue(slot);
-        if (o == null) {
-            Frame tlf = getTopLevelFrame(frame);
-            FrameSlot tlSlot = tlf.getFrameDescriptor().findFrameSlot(name);
-            o = tlf.getValue(tlSlot);
+        if (o == null && frame.getArguments().length > 0) {
+            VirtualFrame parent = (VirtualFrame) frame.getArguments()[0];
+            o = parent.getValue(slot);
         }
         return o;
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Ref " + name + " " + slot);
-        return lookupSlot(frame);
+        // System.out.println("Ref " + name + " " + slot);
+        // System.out.println(findSlot(frame));
+        return findSlot(frame);
     }
 }

@@ -19,7 +19,7 @@ public class IntExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Return " + value);
+        // System.out.println("Return " + value);
         return new Integer(value);
     }
 }

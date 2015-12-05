@@ -24,8 +24,8 @@ public class ScopeFnNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        System.out.println("Defining Func " + slot + " = " + ct);
+        // System.out.println("Defining Func " + slot + " = " + ct);
         frame.setObject(slot, ct);
-        return null;
+        return new NullObj();
     }
 }

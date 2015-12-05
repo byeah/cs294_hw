@@ -17,6 +17,6 @@ public class NullExpNode extends RootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        return null;
+        return new NullObj();
     }
 }

@@ -13,6 +13,7 @@ public class CallSlotExpNode extends RootNode {
     String name;
     @Child RootNode expNode;
     @Children final RootNode[] argNodes;
+    static int a = 0;
 
     public CallSlotExpNode(String n, RootNode exp, RootNode[] args, FrameDescriptor frameDescriptor) {
         super(Feeny.class, null, frameDescriptor);
@@ -37,15 +38,15 @@ public class CallSlotExpNode extends RootNode {
             case "mod":
                 return i % j;
             case "lt":
-                return (i < j) ? new Integer(0) : null;
+                return (i < j) ? new Integer(0) : new NullObj();
             case "le":
-                return (i <= j) ? new Integer(0) : null;
+                return (i <= j) ? new Integer(0) : new NullObj();
             case "gt":
-                return (i > j) ? new Integer(0) : null;
+                return (i > j) ? new Integer(0) : new NullObj();
             case "ge":
-                return (i >= j) ? new Integer(0) : null;
+                return (i >= j) ? new Integer(0) : new NullObj();
             case "eq":
-                return (i == j) ? new Integer(0) : null;
+                return (i == j) ? new Integer(0) : new NullObj();
         }
         return null;
     }
